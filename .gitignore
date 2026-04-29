@@ -1,0 +1,61 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Large video reels + Git LFS pointer blobs — keep locally; copies not committed (GitHub rejects missing LFS objects).
+assets/reels_videos/
+assets/videos/
+assets/1.webp
+assets/2.webp
+assets/3.webp
+assets/4.webp
+assets/5.webp
+assets/6.webp
+assets/Frame 9.png
+assets/tailor.png
+assets/tailor2.png
+assets/tailro 3.png
+assets/tailor 4 .jpg
+assets/abdul rahman.jpg

@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "3D Marketplace (Web, port 65106 for OAuth)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_marketplace.dart",
+      "args": ["-d", "edge", "--web-port=65106"]
+    },
+    {
+      "name": "3D Marketplace (Web, Chrome, port 65106)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_marketplace.dart",
+      "args": ["-d", "chrome", "--web-port=65106"]
+    }
+  ]
+}
