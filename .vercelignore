@@ -1,4 +1,4 @@
-# Speed up Vercel upload — app code only; backends are remote
+# Vercel upload: app source only — media is loaded from R2 CDN at runtime
 android/
 ios/
 linux/
@@ -8,5 +8,15 @@ windows/
 .idea/
 **/*.apk
 **/*.log
+**/*.glb
+**/*.gltf
+**/*.bin
+**/*.mp4
+assets/reels_videos/
+web/reels_videos/
+web/models/
+web/landing page product/kurta/
+web/landing page product/shalwar kameez/
+3d viewer work/
 **/reference_original_server/images/
 **/reference_original_server/ImageSaved/

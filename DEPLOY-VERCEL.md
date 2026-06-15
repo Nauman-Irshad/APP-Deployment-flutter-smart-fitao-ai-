@@ -11,6 +11,18 @@ Repo: [APP-Deployment-flutter-smart-fitao-ai-](https://github.com/Nauman-Irshad/
   - **3D / reels CDN:** Cloudflare R2
   - **Stripe:** `https://smartfitao-stripe-api.onrender.com`
 
+## Media (videos & 3D models) — NOT in this repo
+
+Large files are **not** pushed to GitHub or Vercel. The app loads them online:
+
+| Media | Source |
+|-------|--------|
+| Reel videos | Cloudflare R2 (`production_urls.dart` → `reel1`…`reel5`) |
+| 3D kurta / shalwar GLB | R2 CDN (`ProductionUrls.glbKurtaBlack`, etc.) |
+| 2D try-on API | `https://fyp-web-code-deployment-flea.vercel.app` |
+
+Local `*.glb`, `*.mp4`, and `web/reels_videos/` are in `.gitignore` and `.vercelignore`.
+
 ## Vercel setup (one time)
 
 1. Import this GitHub repo in [Vercel](https://vercel.com/new).

@@ -6,15 +6,25 @@ build/
 android/.kotlin/
 flutter_*.log
 
-# Flutter web build output only — keep /web/ sources in git for Vercel
+# Flutter web build output only — keep /web/ index.html + icons in git
 build/web/
 
-# Huge web duplicates — production loads GLB/reels from Cloudflare R2
-/web/*.glb
+# ── Large media: online only (Cloudflare R2 / production_urls.dart) ──
+# Do NOT commit reels, GLB 3D avatars, or bundled model folders.
+*.glb
+*.gltf
+*.bin
+/assets/reels_videos/
 /web/reels_videos/
 /web/models/
+/web/*.glb
 /web/landing page product/kurta/
 /web/landing page product/shalwar kameez/
+/3d viewer work/
+**/reference_original_server/images/
+**/reference_original_server/ImageSaved/
 
-# Optional: keep huge 4K reels only on your machine (production uses R2 CDN)
-/assets/reels_videos/*.mp4
+# Local 4K reel MP4s (app streams from R2 in production)
+*.mp4
+!assets/reels_videos/tailor1.mp4
+!assets/reels_videos/tailor2.mp4
