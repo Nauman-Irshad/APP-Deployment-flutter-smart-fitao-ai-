@@ -8,6 +8,9 @@ import '../User 3D Market Place/auth-login-sign/auth_ui.dart';
 import 'forgot_password_otp.dart';
 import 'auth_validators.dart';
 import 'auth_reset_memory.dart';
+import '../config/demo_accounts.dart';
+import '../services/demo_accounts_service.dart';
+import '../widgets/demo_login_button.dart';
 
 class LoginAsTailorScreen extends StatefulWidget {
   final VoidCallback? onBackToRolePicker;
@@ -136,7 +139,37 @@ class _LoginAsTailorScreenState extends State<LoginAsTailorScreen> {
                         Text('Welcome back', style: AuthUi.titleStyle(context)),
                         const SizedBox(height: 6),
                         Text('Login as Tailor', style: AuthUi.subtitleStyle(context)),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 14),
+                        DemoLoginButton(
+                          label: 'Demo login',
+                          email: DemoAccounts.tailorEmail,
+                          password: DemoAccounts.tailorPassword,
+                          onFill: (e, p) {
+                            emailController.text = e;
+                            passwordController.text = p;
+                          },
+                          onSignIn: () async {
+                            setState(() => isLoading = true);
+                            try {
+                              await DemoAccountsService.signInDemoTailor();
+                              final uid = AppBackend.instance.currentUid;
+                              final profile = await AppBackend.instance.getUserProfile(uid);
+                              if (profile.role != 'tailor') {
+                                await FirebaseAuth.instance.signOut();
+                                throw StateError('Not a tailor account');
+                              }
+                              if (!context.mounted) return;
+                              await AuthResetMemory.saveLastRole('tailor');
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => const BotmNavScreen()),
+                              );
+                            } finally {
+                              if (mounted) setState(() => isLoading = false);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
                         AuthTextField(
                           label: 'Email',
                           hint: 'Enter your email',

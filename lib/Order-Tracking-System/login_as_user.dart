@@ -8,6 +8,9 @@ import '../User 3D Market Place/auth-login-sign/auth_ui.dart';
 import 'forgot_password_otp.dart';
 import 'auth_validators.dart';
 import 'auth_reset_memory.dart';
+import '../config/demo_accounts.dart';
+import '../services/demo_accounts_service.dart';
+import '../widgets/demo_login_button.dart';
 
 class LoginAsUserScreen extends StatefulWidget {
   /// When non-null (e.g. inside main app [AuthFlow]), back returns to the green role picker.
@@ -137,7 +140,37 @@ class _LoginAsUserScreenState extends State<LoginAsUserScreen> {
                         Text('Welcome back', style: AuthUi.titleStyle(context)),
                         const SizedBox(height: 6),
                         Text('Login as User', style: AuthUi.subtitleStyle(context)),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 14),
+                        DemoLoginButton(
+                          label: 'Demo login',
+                          email: DemoAccounts.customerEmail,
+                          password: DemoAccounts.customerPassword,
+                          onFill: (e, p) {
+                            emailController.text = e;
+                            passwordController.text = p;
+                          },
+                          onSignIn: () async {
+                            setState(() => isLoading = true);
+                            try {
+                              await DemoAccountsService.signInDemoCustomer();
+                              final uid = AppBackend.instance.currentUid;
+                              final profile = await AppBackend.instance.getUserProfile(uid);
+                              if (profile.role != 'user') {
+                                await FirebaseAuth.instance.signOut();
+                                throw StateError('Not a user account');
+                              }
+                              if (!context.mounted) return;
+                              await AuthResetMemory.saveLastRole('user');
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => const MarketPlace3D()),
+                              );
+                            } finally {
+                              if (mounted) setState(() => isLoading = false);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
                         AuthTextField(
                           label: 'Email',
                           hint: 'Enter your email',

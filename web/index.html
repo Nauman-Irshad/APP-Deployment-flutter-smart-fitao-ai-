@@ -19,6 +19,8 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="SmartFitao AI – 3D marketplace for traditional wear.">
+  <!-- Let Edge/Chrome use webcam inside Flutter Web + embedded pose iframe (port 5000) -->
+  <meta http-equiv="Permissions-Policy" content="camera=(self http://127.0.0.1:5000 http://localhost:5000), microphone=(self)">
 
   <!-- Mobile-first viewport: scale 1:1, no user zoom-out, fits device width -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -37,9 +39,19 @@
   <title>SmartFitao AI</title>
   <link rel="manifest" href="manifest.json">
   <!-- Required for 3D model-viewer on web -->
-  <script type="module" src="https://unpkg.com/@google/model-viewer@3.4.0/dist/model-viewer.min.js" defer></script>
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.4.0/dist/model-viewer.min.js"></script>
 </head>
 <body>
+  <noscript>SmartFitao requires JavaScript. Enable it and reload.</noscript>
+  <div id="load-fallback" style="font-family:Segoe UI,sans-serif;padding:24px;color:#115E59;">
+    Loading SmartFitao…
+  </div>
   <script src="flutter_bootstrap.js" async></script>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var el = document.getElementById('load-fallback');
+      if (el) el.remove();
+    });
+  </script>
 </body>
 </html>

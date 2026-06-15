@@ -1,15 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:model_viewer_plus/model_viewer_plus.dart';
-import 'model 1 ai size prediction/live_measurement.dart';
+
+import '../../services/customer_fitting_store.dart';
+import 'fabric_product_screen.dart';
+import 'size prediction model/live_measurement.dart';
 import 'standard_sizes.dart';
+import 'marketplace_pkr.dart';
 import 'seller_profile_screen.dart';
 import 'chat.dart';
 import 'viewer_asset_src.dart';
+import 'landing_page_products.dart';
+import 'product_model_preview.dart';
+import 'marketplace_bottom_nav.dart';
 
-/// Default seller profile listing — same single SKU as marketplace (`product1` GLB only).
-final List<Map<String, dynamic>> _sellerProducts = [
-  {'id': 1, 'title': 'Classic White Shalwar Kameez', 'price': 5490, 'category': 'Shalwar Kameez', 'modelPath': '3d viewer work/models/product1/product1.glb'},
-];
+/// Seller profile listings — full landing catalog + shop info.
+List<Map<String, dynamic>> sellerMarketplaceProducts({
+  String sellerName = 'SmartFitao Store',
+  String sellerAddress = '45 E1, near Lacas School, Johar Town, Lahore',
+}) {
+  return [
+    for (final p in kLandingPageProducts)
+      {
+        ...Map<String, dynamic>.from(p),
+        'sellerName': sellerName,
+        'sellerAddress': sellerAddress,
+      },
+  ];
+}
+
+final List<Map<String, dynamic>> _sellerProducts = sellerMarketplaceProducts();
 
 class ProductViewerScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -23,30 +41,68 @@ class ProductViewerScreen extends StatefulWidget {
 class _ProductViewerScreenState extends State<ProductViewerScreen> {
   String? _measurementMode;
 
+  @override
+  void initState() {
+    super.initState();
+    CustomerFittingStore.saveSelectedProduct(widget.product);
+  }
+
   Widget _buildProductHero(double viewerHeight) {
-    final path = resolvedMarketplaceModelPath(widget.product);
-    if (path.isEmpty) return _noModelPlaceholder();
+    final isFabric = widget.product['section'] == 'Fabric' ||
+        widget.product['category'] == 'Fabric';
+    if (isFabric) {
+      final fabricImg = widget.product['imagePath']?.toString() ?? '';
+      if (fabricImg.isEmpty) return _noModelPlaceholder();
+      return SizedBox(
+        height: viewerHeight,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: _fabricImage(imageSrcForProduct(widget.product)),
+        ),
+      );
+    }
+
+    final imagePath = widget.product['imagePath']?.toString();
+    if (imagePath != null && imagePath.isNotEmpty) {
+      return SizedBox(
+        height: viewerHeight,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: _fabricImage(landingAssetSrc(imagePath)),
+        ),
+      );
+    }
+
+    final src = modelSrcForProduct(widget.product);
+    if (src.isEmpty) return _noModelPlaceholder();
     return SizedBox(
       height: viewerHeight,
       width: double.infinity,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: ModelViewer(
-          // `<model-viewer>` uses Three.js on web for GLTF.
-          src: viewerAssetSrc(path),
+        child: ProductModelPreview(
+          src: src,
           alt: widget.product['title']?.toString() ?? 'Outfit preview',
-          loading: Loading.eager,
-          reveal: Reveal.auto,
-          autoRotate: true,
-          autoRotateDelay: 0,
-          rotationPerSecond: 'pi/6',
-          cameraControls: true,
-          interactionPrompt: InteractionPrompt.none,
-          ar: false,
-          debugLogging: false,
-          backgroundColor: Colors.transparent,
+          compact: false,
         ),
       ),
+    );
+  }
+
+  Widget _fabricImage(String src) {
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      return Image.network(
+        src,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _noModelPlaceholder(),
+      );
+    }
+    return Image.asset(
+      src,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _noModelPlaceholder(),
     );
   }
 
@@ -66,8 +122,16 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
     );
   }
 
+  bool get _isFabric =>
+      widget.product['section'] == 'Fabric' ||
+      widget.product['category'] == 'Fabric';
+
   @override
   Widget build(BuildContext context) {
+    if (_isFabric) {
+      return FabricProductScreen(product: widget.product);
+    }
+
     if (_measurementMode == 'live') {
       return LiveMeasurementScreen(
         product: widget.product,
@@ -86,7 +150,11 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
 
     return Scaffold(
       floatingActionButton: null,
-      backgroundColor: Color(0xFF171717), 
+      backgroundColor: Color(0xFF171717),
+      bottomNavigationBar: MarketplaceBottomNav(
+        selectedIndex: 0,
+        onTap: (i) => MarketplaceBottomNav.goToTab(context, i),
+      ),
       appBar: AppBar(
         backgroundColor: Color(0xFF171717),
         elevation: 0,
@@ -187,11 +255,33 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
                             height: 1.3,
                           ),
                         ),
+                        if (widget.product['colorName'] != null) ...[
+                          SizedBox(height: 6),
+                          Text(
+                            'Color: ${widget.product['colorName']}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                        ],
+                        if (widget.product['category'] != null) ...[
+                          SizedBox(height: 4),
+                          Text(
+                            '${widget.product['category']}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
                         SizedBox(height: 8),
                         Row(
                           children: [
                             Text(
-                              'PKR ${widget.product['price']}',
+                              formatPkr(widget.product['price'] is num
+                                  ? widget.product['price'] as num
+                                  : num.tryParse('${widget.product['price']}')),
                               style: TextStyle(
                                 fontSize: screenW > 360 ? 20 : 18,
                                 fontWeight: FontWeight.bold,
@@ -202,7 +292,9 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
                                 widget.product['originalPrice'] != 0) ...[
                               SizedBox(width: 10),
                               Text(
-                                'PKR ${widget.product['originalPrice']}',
+                                formatPkr(widget.product['originalPrice'] is num
+                                    ? widget.product['originalPrice'] as num
+                                    : num.tryParse('${widget.product['originalPrice']}')),
                                 style: TextStyle(
                                   fontSize: 13,
                                   color: Colors.grey[500],
@@ -374,14 +466,13 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
                                   onPressed: () {
                                     final sid = widget.product['sellerId']?.toString();
                                     final sName = widget.product['sellerName']?.toString() ?? 'Seller';
-                                    final chatId = (sid != null && sid.isNotEmpty) ? 'seller_$sid' : 'seller_smartfitao_store';
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute<void>(
                                         builder: (_) => ChatScreen(
-                                          initialChatId: chatId,
                                           initialChatName: sName,
                                           initialChatType: 'Seller',
+                                          initialPeerId: sid,
                                         ),
                                       ),
                                     );

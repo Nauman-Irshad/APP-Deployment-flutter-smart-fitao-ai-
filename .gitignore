@@ -1,61 +1,20 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+build/
 .dart_tool/
+*.apk
+.idea/
 .flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
+android/.kotlin/
+flutter_*.log
 
-# Symbolication related
-app.*.symbols
+# Flutter web build output only — keep /web/ sources in git for Vercel
+build/web/
 
-# Obfuscation related
-app.*.map.json
+# Huge web duplicates — production loads GLB/reels from Cloudflare R2
+/web/*.glb
+/web/reels_videos/
+/web/models/
+/web/landing page product/kurta/
+/web/landing page product/shalwar kameez/
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# Large video reels + Git LFS pointer blobs — keep locally; copies not committed (GitHub rejects missing LFS objects).
-assets/reels_videos/
-assets/videos/
-assets/1.webp
-assets/2.webp
-assets/3.webp
-assets/4.webp
-assets/5.webp
-assets/6.webp
-assets/Frame 9.png
-assets/tailor.png
-assets/tailor2.png
-assets/tailro 3.png
-assets/tailor 4 .jpg
-assets/abdul rahman.jpg
+# Optional: keep huge 4K reels only on your machine (production uses R2 CDN)
+/assets/reels_videos/*.mp4

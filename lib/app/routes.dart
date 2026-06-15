@@ -7,6 +7,8 @@ import '../Order-Tracking-System/tracking.dart' show RoleSelectionScreen;
 import '../User 3D Market Place/profile.dart';
 import '../Tailor/tailor_center.dart';
 import '../seller_dashboard/seller_center.dart';
+import '../2d_try_on_app/cv_return_listener.dart';
+import '../app_navigator.dart';
 
 class AppRoutes {
   static const String splash = '/';
@@ -26,7 +28,12 @@ class AppRoutes {
       case auth:
         return MaterialPageRoute(builder: (_) => const RoleSelectionScreen());
       case marketplace:
-        return MaterialPageRoute(builder: (_) => const MarketPlace3D());
+        return MaterialPageRoute(
+          builder: (_) => CvReturnListener(
+            navigatorKey: rootNavigatorKey,
+            child: const MarketPlace3D(),
+          ),
+        );
       case profile:
         return MaterialPageRoute(builder: (_) => ProfileScreen());
       case tailorCenter:

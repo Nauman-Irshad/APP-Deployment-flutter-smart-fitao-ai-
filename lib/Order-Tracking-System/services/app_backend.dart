@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../tracking.dart' as tracking;
 
@@ -45,6 +46,8 @@ class ProductModel {
   final bool isOutOfStock;
   /// PKR profit per unit for seller analytics only (not exposed on marketplace).
   final double profitPerUnit;
+  /// Listed on user 3D landing / marketplace grid.
+  final bool showOnLanding;
 
   ProductModel({
     required this.id,
@@ -59,6 +62,7 @@ class ProductModel {
     this.stockQuantity = 999999,
     this.isOutOfStock = false,
     this.profitPerUnit = 0,
+    this.showOnLanding = true,
   });
 
   bool get isPurchasable => !isOutOfStock && stockQuantity > 0;
@@ -163,6 +167,24 @@ class AppBackend {
 
   String _asString(dynamic v) => v?.toString() ?? '';
 
+  String _normalizeMarketplaceSection(String raw) {
+    final s = raw.trim();
+    if (s.isEmpty) return s;
+    final lower = s.toLowerCase();
+    if (lower == 'kurta shalwar' ||
+        lower == 'kurta pajama' ||
+        lower == 'kurtaz pajama' ||
+        lower == 'kurtaz shalwar' ||
+        lower.contains('kurta')) {
+      return 'Kurta Shalwar';
+    }
+    if (lower == 'shalwar kameez' || lower.contains('shalwar kameez')) {
+      return 'Shalwar Kameez';
+    }
+    if (lower == 'fabric') return 'Fabric';
+    return s;
+  }
+
   bool _asBool(dynamic v) => v is bool ? v : (v?.toString().toLowerCase() == 'true');
 
   Map<String, dynamic> _asStringMap(dynamic v) {
@@ -216,7 +238,7 @@ class AppBackend {
     double stitchingRate = 0,
   }) async {
     await _db.collection('users').doc(uid).set({
-      'email': email,
+      'email': email.trim().toLowerCase(),
       'name': name,
       'role': role,
       'shopName': shopName,
@@ -225,6 +247,35 @@ class AppBackend {
       if (role == 'tailor') 'stitchingRate': stitchingRate,
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  /// Find registered user by email (demo tailor / seller lookup).
+  Future<AppUserProfile?> findUserByEmail(String email) async {
+    final e = email.trim().toLowerCase();
+    if (e.isEmpty) return null;
+    final snap = await _db
+        .collection('users')
+        .where('email', isEqualTo: e)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final d = snap.docs.first;
+    final data = d.data();
+    final rateRaw = data['stitchingRate'];
+    final stitchingRate = rateRaw is num
+        ? rateRaw.toDouble()
+        : (double.tryParse(rateRaw?.toString() ?? '') ?? 0.0);
+    return AppUserProfile(
+      uid: d.id,
+      name: _asString(data['name']),
+      email: _asString(data['email']),
+      role: _asString(data['role']).isEmpty ? 'user' : _asString(data['role']),
+      shopName: _asString(data['shopName']),
+      address: _asString(data['address']),
+      available: _asBool(data['available']),
+      stitchingRate: stitchingRate,
+      tailorProfitPerUnit: _tailorProfitPerUnitFromData(data),
+    );
   }
 
   Future<AppUserProfile> getUserProfile(String uid) async {
@@ -474,13 +525,28 @@ class AppBackend {
     required String name,
     required double price,
     required double discountPercent,
-    required Map<String, dynamic> details,
+    Map<String, dynamic> details = const {},
     int stockQuantity = 1,
     double profitPerUnit = 0,
+    String category = 'Kurta Shalwar',
+    String section = '',
+    String colorName = '',
+    String imageUrl = '',
+    String modelPath = '',
+    bool showOnLanding = true,
   }) async {
     final doc = _db.collection('products').doc();
     final stock = stockQuantity < 0 ? 0 : stockQuantity;
     final profit = profitPerUnit < 0 ? 0.0 : profitPerUnit;
+    final sec = section.trim().isNotEmpty ? section.trim() : category.trim();
+    final mergedDetails = <String, dynamic>{
+      ...details,
+      'category': category.trim().isNotEmpty ? category.trim() : 'Other',
+      'section': sec,
+      if (colorName.trim().isNotEmpty) 'colorName': colorName.trim(),
+      if (imageUrl.trim().isNotEmpty) 'imageUrl': imageUrl.trim(),
+      if (modelPath.trim().isNotEmpty) 'modelPath': modelPath.trim(),
+    };
     await doc.set({
       'sellerId': sellerId,
       'sellerName': sellerName,
@@ -491,9 +557,9 @@ class AppBackend {
       'profitPerUnit': profit,
       'stockQuantity': stock,
       'isOutOfStock': stock <= 0,
-      // Product catalog is neutral; buyer picks Standard vs Custom at checkout.
+      'showOnLanding': showOnLanding,
       'type': 'standard',
-      'details': details,
+      'details': mergedDetails,
       'createdAt': FieldValue.serverTimestamp(),
     });
     return doc.id;
@@ -537,9 +603,21 @@ class AppBackend {
   Map<String, dynamic> marketplaceProductMap(ProductModel p) {
     final d = p.details;
     final imageUrl = _asString(d['imageUrl']);
-    final modelPath = _asString(d['modelPath']);
+    var modelPath = _asString(d['modelPath']);
+    if (modelPath.startsWith('/local-products/')) {
+      const base = String.fromEnvironment(
+        'LOCAL_PRODUCT_API_BASE',
+        defaultValue: 'http://127.0.0.1:5190',
+      );
+      modelPath = '${base.replaceAll(RegExp(r'/+$'), '')}$modelPath';
+    }
     var category = _asString(d['category']);
     if (category.isEmpty) category = 'Other';
+    var section = _asString(d['section']);
+    if (section.isEmpty) section = category;
+    category = _normalizeMarketplaceSection(category);
+    section = _normalizeMarketplaceSection(section);
+    final colorName = _asString(d['colorName']);
     final disc = p.discountPercent.clamp(0.0, 100.0);
     final unitAfter = p.price * (1 - disc / 100);
     final orig = p.price.round();
@@ -547,19 +625,24 @@ class AppBackend {
     return <String, dynamic>{
       'id': p.id,
       'firebaseProductId': p.id,
-      'title': p.name,
+      'title': p.name.trim().isEmpty ? 'Product' : p.name,
       'price': unitAfter.round(),
       if (disc > 0) 'originalPrice': orig,
       'category': category,
+      if (section.isNotEmpty) 'section': section,
+      if (colorName.isNotEmpty) 'colorName': colorName,
       if (modelPath.isNotEmpty) 'modelPath': modelPath,
+      if (imageUrl.isNotEmpty) 'imagePath': imageUrl,
       if (imageUrl.isNotEmpty) 'imageUrl': imageUrl,
       'sellerId': p.sellerId,
       'sellerName': p.sellerName,
       'sellerAddress': p.sellerAddress,
       'discountPercent': p.discountPercent,
-      'details': Map<String, dynamic>.from(p.details),
+      'details': _sanitizeOrderDetails(Map<String, dynamic>.from(p.details)),
       'stockQuantity': p.stockQuantity,
       'outOfStock': unavailable,
+      'showOnLanding': p.showOnLanding,
+      'isSellerListing': true,
     };
   }
 
@@ -591,6 +674,7 @@ class AppBackend {
       stockQuantity: parsedStock < 0 ? 0 : parsedStock,
       isOutOfStock: _asBool(data['isOutOfStock']),
       profitPerUnit: _profitPerUnitFromData(data),
+      showOnLanding: data['showOnLanding'] != false,
     );
   }
 
@@ -927,13 +1011,24 @@ class AppBackend {
         );
   }
 
+  List<ProductModel> _productsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
+    final list = <ProductModel>[];
+    for (final doc in snap.docs) {
+      try {
+        list.add(_productFromDoc(doc));
+      } catch (e, st) {
+        debugPrint('Skip product doc ${doc.id}: $e\n$st');
+      }
+    }
+    list.sort((a, b) => b.name.compareTo(a.name));
+    return list;
+  }
+
   Stream<List<ProductModel>> streamAllProducts() {
     // Avoid orderBy('createdAt'): legacy docs may lack it and composite indexes often bite FYP demos.
-    return _db.collection('products').snapshots().map((snap) {
-      final list = snap.docs.map(_productFromDoc).toList();
-      list.sort((a, b) => b.name.compareTo(a.name));
-      return list;
-    });
+    return _db.collection('products').snapshots().map(_productsFromSnapshot);
   }
 
   /// Products listed by one seller (for storefront / marketplace filtering).
@@ -942,11 +1037,7 @@ class AppBackend {
         .collection('products')
         .where('sellerId', isEqualTo: sellerId)
         .snapshots()
-        .map((snap) {
-      final list = snap.docs.map(_productFromDoc).toList();
-      list.sort((a, b) => b.name.compareTo(a.name));
-      return list;
-    });
+        .map(_productsFromSnapshot);
   }
 
   Future<void> setTailorAvailableAndRate({
@@ -1002,13 +1093,9 @@ class AppBackend {
     });
   }
 
-  Future<List<AppUserProfile>> fetchAvailableTailors() async {
-    final snap = await _db
-        .collection('users')
-        .where('role', isEqualTo: 'tailor')
-        .where('available', isEqualTo: true)
-        .get();
-
+  List<AppUserProfile> _tailorsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) {
     return snap.docs
         .map((d) {
           final data = d.data();
@@ -1030,6 +1117,30 @@ class AppBackend {
         })
         .where((t) => t.stitchingRate > 0)
         .toList();
+  }
+
+  Future<List<AppUserProfile>> fetchAvailableTailors() async {
+    final snap = await _db
+        .collection('users')
+        .where('role', isEqualTo: 'tailor')
+        .where('available', isEqualTo: true)
+        .get();
+    return _tailorsFromSnapshot(snap);
+  }
+
+  /// Find tailor / chat: any registered tailor with a stitching rate (not only `available`).
+  Future<List<AppUserProfile>> fetchTailorsForCustomerChat() async {
+    final snap = await _db
+        .collection('users')
+        .where('role', isEqualTo: 'tailor')
+        .get();
+    final list = await _tailorsFromSnapshot(snap);
+    list.sort((a, b) {
+      final aLabel = a.shopName.isNotEmpty ? a.shopName : a.name;
+      final bLabel = b.shopName.isNotEmpty ? b.shopName : b.name;
+      return aLabel.compareTo(bLabel);
+    });
+    return list;
   }
 
   Future<String> createOrder({
@@ -1110,12 +1221,15 @@ class AppBackend {
     }
 
     final tailorProfitTotal = precomputedTailorProfitTotal.clamp(0.0, 1e12);
-    final lineSalesTotal = totalAmount * quantity;
+    final productLineTotal = totalAmount * quantity;
     final sellerProfitTotal = profitPerUnit * quantity;
+    final customerGrandTotal = productLineTotal + tailorStitchingTotal;
     final fullPayload = Map<String, dynamic>.from(payload)
-      ..['lineSalesTotal'] = lineSalesTotal
+      ..['productLineTotal'] = productLineTotal
+      ..['lineSalesTotal'] = productLineTotal
       ..['sellerProfitTotal'] = sellerProfitTotal
-      ..['tailorProfitTotal'] = tailorProfitTotal;
+      ..['tailorProfitTotal'] = tailorProfitTotal
+      ..['customerGrandTotal'] = customerGrandTotal;
 
     batch.set(orderRef, fullPayload);
     await batch.commit();

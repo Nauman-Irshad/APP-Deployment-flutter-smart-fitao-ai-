@@ -243,7 +243,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircleAvatar(
                             radius: 60,
                             backgroundColor: _whiteColor,
-                            backgroundImage: _image != null ? FileImage(_image!) : AssetImage('assets/profile.jpg') as ImageProvider,
+                            backgroundImage: _image != null
+                                ? FileImage(_image!)
+                                : const AssetImage('assets/banner 1.png')
+                                    as ImageProvider,
                           ),
                         ),
                         if (_isEditing)

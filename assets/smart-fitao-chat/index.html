@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Fitao AI</title>
+  <link rel="stylesheet" href="css/style.css?v=10" />
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+  <script src="chat-engine.js?v=2"></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="main-wrap">
+      <header class="chat-header">
+        <h1 class="chat-header-title">Smart Fitao AI</h1>
+        <div class="chat-header-actions">
+          <button type="button" class="icon-btn" id="new-chat-btn" title="New chat" aria-label="New chat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button type="button" class="header-btn" id="prev-chat-btn">Previous chats</button>
+          <button type="button" class="header-btn header-btn-primary" id="trending-btn">Trending questions</button>
+          <span id="api-status" class="api-status"></span>
+        </div>
+      </header>
+
+      <main class="chat-main">
+        <div id="messages" class="messages"></div>
+        <div class="empty-state" id="empty-state">
+          <h2 class="empty-title">Smart Fitao AI</h2>
+          <p class="empty-sub">Ask about 3D kurtas, shalwar kameez, returns, delivery, or try-on.</p>
+          <div class="suggestions home-suggestions" id="home-suggestions"></div>
+          <p class="empty-hint">Click a question above, or open <strong>Trending questions</strong> for more.</p>
+        </div>
+        <p id="status" class="status"></p>
+      </main>
+
+      <div class="input-wrap">
+        <div class="input-container">
+          <input type="text" id="question" placeholder="Message Smart Fitao AI..." autocomplete="off" />
+          <button type="button" id="ask" class="send-btn" aria-label="Send">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Previous chats modal -->
+  <div class="modal-overlay hidden" id="history-modal" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-labelledby="history-modal-title">
+      <div class="modal-header">
+        <h2 id="history-modal-title">Previous chats</h2>
+        <button type="button" class="modal-close" id="history-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-empty hidden" id="history-empty">No previous chats yet. Start a conversation!</p>
+        <ul class="history-list" id="history-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trending questions modal -->
+  <div class="modal-overlay hidden" id="trending-modal" aria-hidden="true">
+    <div class="modal-panel modal-panel-wide" role="dialog" aria-labelledby="trending-modal-title">
+      <div class="modal-header">
+        <h2 id="trending-modal-title">Trending questions</h2>
+        <button type="button" class="modal-close" id="trending-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Copy a question, paste it in the chat box, and press Send — or click <strong>Ask</strong> to send it directly.</p>
+        <ul class="trending-list" id="trending-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var PRODUCTION_API = 'https://fyp-web-code-deployment-flea.vercel.app';
+    var o = window.location.origin || '';
+    var API_BASE = PRODUCTION_API;
+    if (o.indexOf('127.0.0.1') !== -1 || o.indexOf('localhost') !== -1) {
+      if (o.indexOf(':5177') !== -1) {
+        API_BASE = o;
+      } else {
+        API_BASE = 'http://127.0.0.1:5002';
+      }
+    } else if ((o.startsWith('http://') || o.startsWith('https://')) && (o.indexOf('5177') !== -1 || o.indexOf('vercel.app') !== -1)) {
+      API_BASE = o;
+    }
+    var API_URL = API_BASE + '/api/chat';
+    var HEALTH_URL = API_BASE + '/api/health';
+
+    var appEl = document.getElementById('app');
+    var messagesEl = document.getElementById('messages');
+    var emptyStateEl = document.getElementById('empty-state');
+    var questionEl = document.getElementById('question');
+    var askBtn = document.getElementById('ask');
+    var statusEl = document.getElementById('status');
+    var apiStatusEl = document.getElementById('api-status');
+    var historyModal = document.getElementById('history-modal');
+    var historyListEl = document.getElementById('history-list');
+    var historyEmptyEl = document.getElementById('history-empty');
+    var trendingModal = document.getElementById('trending-modal');
+    var trendingListEl = document.getElementById('trending-list');
+
+    var HOME_SUGGESTIONS = [
+      { label: 'Virtual try-on', q: 'How do I try on a kurta virtually?' },
+      { label: 'What is SmartFitao?', q: 'What is SmartFitao?' },
+      { label: 'Black kurta (3D)', q: 'Show me black kurta' },
+      { label: 'Order types', q: 'What are the two order types?' },
+      { label: 'Return policy', q: 'What is the return policy?' },
+      { label: 'Delivery time', q: 'How long does delivery take?' },
+      { label: 'Body landmarks', q: 'How many body points does it detect?' },
+      { label: 'All shalwar kameez (3D)', q: 'Show me all shalwar kameez' },
+      { label: 'Custom order steps', q: 'How many status steps for custom orders?' }
+    ];
+
+    var TRENDING_QUESTIONS = [
+      { label: 'Virtual try-on', q: 'How do I try on a kurta virtually?' },
+      { label: 'Photo format', q: 'What file format should my photo be?' },
+      { label: 'Kurta designs count', q: 'How many kurta designs are available?' },
+      { label: 'Try-on wait time', q: 'How long does the try-on take?' },
+      { label: 'Download try-on result', q: 'Can I download the result?' },
+      { label: 'Pose capture purpose', q: 'What is pose capture used for?' },
+      { label: 'Body landmarks', q: 'How many body points does it detect?' },
+      { label: 'Visibility threshold', q: 'What visibility score is required?' },
+      { label: 'Pose AI training', q: 'Does it use custom AI training?' },
+      { label: 'Pose API endpoints', q: 'What are the API endpoints for pose capture?' },
+      { label: 'How chatbot works', q: 'How does the chatbot work?' },
+      { label: 'Chatbot models', q: 'What models does the chatbot use?' },
+      { label: '3D products in chat', q: 'Can the chatbot show me 3D products?' },
+      { label: 'TF-IDF threshold', q: 'What is the similarity threshold for matching?' },
+      { label: 'FAISS memory', q: 'How is the FAISS memory built?' },
+      { label: 'Off-topic questions', q: 'What happens if I ask about non-clothing items?' },
+      { label: 'Order types', q: 'What are the two order types?' },
+      { label: 'Custom order steps', q: 'How many status steps for custom orders?' },
+      { label: 'Standard order steps', q: 'How many steps for standard orders?' },
+      { label: 'Order tracking tech', q: 'What technology handles order tracking?' },
+      { label: 'Track by order ID', q: 'Can customers track by order ID?' },
+      { label: 'Tracking routes', q: 'What are the main routes for tracking?' },
+      { label: 'Tech stack', q: 'What is the overall tech stack?' },
+      { label: 'Deployment', q: 'Where is the app deployed?' },
+      { label: 'Run locally', q: 'How do I run the project locally?' },
+      { label: 'Creators', q: 'Who created SmartFitao?' },
+      { label: 'What is SmartFitao?', q: 'What is SmartFitao?' },
+      { label: 'Return policy', q: 'What is the return policy?' },
+      { label: 'Delivery time', q: 'How long does delivery take?' },
+      { label: 'Track my order', q: 'How can I track my order?' },
+      { label: 'Payment methods', q: 'What payment methods do you accept?' },
+      { label: 'Black kurta (3D)', q: 'Show me black kurta' },
+      { label: 'Brown kurta (3D)', q: 'Show me brown kurta' },
+      { label: 'Sky blue kurta (3D)', q: 'Show me sky blue kurta' },
+      { label: 'Black shalwar kameez (3D)', q: 'Show me black shalwar kameez' },
+      { label: 'Brown shalwar kameez (3D)', q: 'Show me brown shalwar kameez' },
+      { label: 'White shalwar kameez (3D)', q: 'Show me white shalwar kameez' },
+      { label: 'All kurtas (3D)', q: 'Show me all kurta in 3D' },
+      { label: 'All shalwar kameez (3D)', q: 'Show me all shalwar kameez' },
+      { label: 'Show 3D products', q: 'Show me 3D products' },
+      { label: 'Recommend 3D products', q: 'Recommend 3D products' }
+    ];
+
+    var DEFAULT_CHAT_SUGGESTIONS = [
+      'How do I try on a kurta virtually?',
+      'What is SmartFitao?',
+      'Show me black kurta',
+      'What are the two order types?',
+      'What is the return policy?'
+    ];
+
+    var chats = [];
+    var currentChatId = null;
+    var nextId = 1;
+    var loadingProgressTimer = null;
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (isError ? ' error' : '');
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+    function escapeAttr(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    /** Full URL for GLB — encodes spaces in /landing page product/… paths. */
+    function resolveModelUrl(modelUrl) {
+      var raw = String(modelUrl || '').trim();
+      if (!raw) return '';
+      if (/^https?:\/\//i.test(raw)) return raw;
+      var base = (API_BASE || '').replace(/\/$/, '');
+      var path = raw.charAt(0) === '/' ? raw : '/' + raw;
+      var encoded = path.split('/').map(function(seg) {
+        if (!seg) return '';
+        try { seg = decodeURIComponent(seg); } catch (e) {}
+        return encodeURIComponent(seg);
+      }).join('/');
+      return base + encoded;
+    }
+
+    function createModelViewer(src, alt) {
+      var wrap = document.createElement('div');
+      wrap.className = 'product-3d-viewer-wrap';
+      var viewer = document.createElement('model-viewer');
+      viewer.setAttribute('src', src);
+      viewer.setAttribute('alt', alt || '3D product');
+      viewer.setAttribute('auto-rotate', '');
+      viewer.setAttribute('camera-controls', '');
+      viewer.setAttribute('shadow-intensity', '1');
+      viewer.setAttribute('loading', 'eager');
+      viewer.setAttribute('reveal', 'auto');
+      viewer.setAttribute('touch-action', 'pan-y');
+      viewer.setAttribute('crossorigin', 'anonymous');
+      viewer.style.cssText = 'width:100%;height:220px;background:#f4f4f4;border-radius:8px;';
+      var err = document.createElement('p');
+      err.className = 'product-3d-error';
+      err.style.cssText = 'display:none;padding:12px;font-size:13px;color:#666;text-align:center;';
+      err.textContent = '3D model could not load. Check internet and try again.';
+      viewer.addEventListener('error', function() {
+        viewer.style.display = 'none';
+        err.style.display = 'block';
+      });
+      wrap.appendChild(viewer);
+      wrap.appendChild(err);
+      return wrap;
+    }
+
+    function appendProductCards(contentEl, products) {
+      if (!products || !products.length) return;
+      var wrap = document.createElement('div');
+      wrap.className = 'bot-products';
+      products.forEach(function(p) {
+        var card = document.createElement('div');
+        card.className = 'product-3d-card';
+        var label = document.createElement('div');
+        label.className = 'product-3d-label';
+        label.textContent = p.name || '3D product';
+        card.appendChild(label);
+        card.appendChild(createModelViewer(resolveModelUrl(p.model_url), p.name));
+        wrap.appendChild(card);
+      });
+      contentEl.appendChild(wrap);
+    }
+
+    function findChat(id) {
+      for (var i = 0; i < chats.length; i++) {
+        if (chats[i].id === id) return chats[i];
+      }
+      return null;
+    }
+
+    function createChat() {
+      var id = 'c' + (nextId++);
+      chats.unshift({ id: id, title: 'New chat', messages: [], updatedAt: Date.now() });
+      currentChatId = id;
+      renderCurrentChat();
+      closeModals();
+      return id;
+    }
+
+    function renderHistoryList() {
+      historyListEl.innerHTML = '';
+      if (chats.length === 0) {
+        historyEmptyEl.classList.remove('hidden');
+        return;
+      }
+      historyEmptyEl.classList.add('hidden');
+      chats.forEach(function(chat) {
+        var li = document.createElement('li');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'history-item' + (chat.id === currentChatId ? ' active' : '');
+        btn.innerHTML = '<span class="history-item-title">' + escapeHtml(chat.title) + '</span>' +
+          '<span class="history-item-meta">' + chat.messages.length + ' message' + (chat.messages.length === 1 ? '' : 's') + '</span>';
+        btn.addEventListener('click', function() {
+          currentChatId = chat.id;
+          renderCurrentChat();
+          renderHistoryList();
+          closeModals();
+        });
+        li.appendChild(btn);
+        historyListEl.appendChild(li);
+      });
+    }
+
+    function renderHomeSuggestions() {
+      var el = document.getElementById('home-suggestions');
+      if (!el) return;
+      el.innerHTML = '';
+      HOME_SUGGESTIONS.forEach(function(item) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'suggestion-chip';
+        btn.setAttribute('data-q', item.q);
+        btn.textContent = item.label;
+        btn.addEventListener('click', function() {
+          sendQuestion(item.q);
+        });
+        el.appendChild(btn);
+      });
+    }
+
+    function renderTrendingList() {
+      trendingListEl.innerHTML = '';
+      TRENDING_QUESTIONS.forEach(function(item) {
+        var li = document.createElement('li');
+        li.className = 'trending-item';
+        li.innerHTML =
+          '<div class="trending-item-text">' +
+            '<span class="trending-label">' + escapeHtml(item.label) + '</span>' +
+            '<span class="trending-q">' + escapeHtml(item.q) + '</span>' +
+          '</div>' +
+          '<div class="trending-item-actions">' +
+            '<button type="button" class="copy-btn" data-q="' + escapeAttr(item.q) + '">Copy</button>' +
+            '<button type="button" class="ask-btn" data-q="' + escapeAttr(item.q) + '">Ask</button>' +
+          '</div>';
+        trendingListEl.appendChild(li);
+      });
+      trendingListEl.querySelectorAll('.copy-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var q = btn.getAttribute('data-q');
+          copyQuestion(q, btn);
+        });
+      });
+      trendingListEl.querySelectorAll('.ask-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var q = btn.getAttribute('data-q');
+          closeModals();
+          sendQuestion(q);
+        });
+      });
+    }
+
+    function copyQuestion(q, btn) {
+      function done() {
+        var old = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(function() {
+          btn.textContent = old;
+          btn.classList.remove('copied');
+        }, 1500);
+        questionEl.value = q;
+        questionEl.focus();
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(q).then(done).catch(function() {
+          questionEl.value = q;
+          questionEl.focus();
+          setStatus('Question pasted in the box — press Send.', false);
+        });
+      } else {
+        questionEl.value = q;
+        questionEl.focus();
+        done();
+      }
+    }
+
+    function openModal(el) {
+      el.classList.remove('hidden');
+      el.setAttribute('aria-hidden', 'false');
+    }
+    function closeModals() {
+      historyModal.classList.add('hidden');
+      historyModal.setAttribute('aria-hidden', 'true');
+      trendingModal.classList.add('hidden');
+      trendingModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderCurrentChat() {
+      messagesEl.innerHTML = '';
+      var chat = findChat(currentChatId);
+      if (!chat || chat.messages.length === 0) {
+        appEl.classList.remove('has-messages');
+        return;
+      }
+      appEl.classList.add('has-messages');
+      chat.messages.forEach(function(m) {
+        appendMessageRow(messagesEl, m, false);
+      });
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function appendMessageRow(container, m, scroll) {
+      var userRow = document.createElement('div');
+      userRow.className = 'msg-row user-row';
+      userRow.innerHTML = '<div class="msg-avatar user-avatar">U</div><div class="msg-content user-content">' + escapeHtml(m.question) + '</div>';
+      container.appendChild(userRow);
+
+      var botRow = document.createElement('div');
+      botRow.className = 'msg-row bot-row';
+      botRow.innerHTML = '<div class="msg-avatar bot-avatar">S</div><div class="msg-content bot-content"></div>';
+      var contentEl = botRow.querySelector('.msg-content');
+      var textEl = document.createElement('div');
+      textEl.className = 'bot-text';
+      textEl.textContent = m.answer || '';
+      contentEl.appendChild(textEl);
+      appendProductCards(contentEl, m.products);
+      if (m.suggestions && m.suggestions.length > 0) {
+        var sugLabel = document.createElement('p');
+        sugLabel.className = 'suggestions-label';
+        sugLabel.textContent = 'You can ask these:';
+        contentEl.appendChild(sugLabel);
+        var sugMenu = document.createElement('div');
+        sugMenu.className = 'suggestion-menu';
+        m.suggestions.forEach(function(s) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'suggestion-menu-btn';
+          btn.setAttribute('data-q', s);
+          btn.textContent = s;
+          sugMenu.appendChild(btn);
+        });
+        contentEl.appendChild(sugMenu);
+      }
+      container.appendChild(botRow);
+      if (m.suggestions && m.suggestions.length > 0) {
+        botRow.querySelectorAll('.suggestion-menu-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() { sendQuestion(btn.getAttribute('data-q')); });
+        });
+      }
+      if (scroll) container.scrollTop = container.scrollHeight;
+    }
+
+    function scrollToLatestMessage() {
+      var rows = messagesEl.querySelectorAll('.msg-row');
+      if (rows.length) rows[rows.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function showChatArea() {
+      appEl.classList.add('has-messages');
+    }
+
+    function appendUserBubble(question) {
+      showChatArea();
+      var userRow = document.createElement('div');
+      userRow.className = 'msg-row user-row';
+      userRow.innerHTML = '<div class="msg-avatar user-avatar">U</div><div class="msg-content user-content">' + escapeHtml(question) + '</div>';
+      messagesEl.appendChild(userRow);
+      scrollToLatestMessage();
+    }
+
+    function appendBotLoadingRow() {
+      var botRow = document.createElement('div');
+      botRow.className = 'msg-row bot-row bot-loading-row';
+      botRow.innerHTML =
+        '<div class="msg-avatar bot-avatar">S</div>' +
+        '<div class="msg-content bot-content">' +
+          '<div class="bot-text bot-loading">' +
+            '<span class="bot-loading-label">Smart Fitao is thinking...</span>' +
+            '<span class="bot-loading-pct">0%</span>' +
+          '</div>' +
+          '<div class="bot-loading-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+            '<div class="bot-loading-bar-fill"></div>' +
+          '</div>' +
+        '</div>';
+      messagesEl.appendChild(botRow);
+      scrollToLatestMessage();
+      startLoadingProgress();
+    }
+
+    function startLoadingProgress() {
+      stopLoadingProgress();
+      var row = messagesEl.querySelector('.bot-loading-row');
+      if (!row) return;
+      var pctEl = row.querySelector('.bot-loading-pct');
+      var barEl = row.querySelector('.bot-loading-bar-fill');
+      var trackEl = row.querySelector('.bot-loading-track');
+      var start = Date.now();
+
+      loadingProgressTimer = setInterval(function() {
+        var elapsed = Date.now() - start;
+        var pct;
+        if (elapsed < 350) {
+          pct = (elapsed / 350) * 38;
+        } else {
+          pct = 38 + (56 * (1 - Math.exp(-(elapsed - 350) / 5500)));
+          pct = Math.min(96, pct);
+        }
+        var rounded = Math.round(pct);
+        if (pctEl) pctEl.textContent = rounded + '%';
+        if (barEl) barEl.style.width = rounded + '%';
+        if (trackEl) trackEl.setAttribute('aria-valuenow', String(rounded));
+        setStatus('Smart Fitao is thinking... ' + rounded + '%');
+      }, 40);
+    }
+
+    function stopLoadingProgress() {
+      if (loadingProgressTimer) {
+        clearInterval(loadingProgressTimer);
+        loadingProgressTimer = null;
+      }
+    }
+
+    function removeBotLoadingRow(showComplete) {
+      var el = messagesEl.querySelector('.bot-loading-row');
+      if (!el) {
+        stopLoadingProgress();
+        return;
+      }
+      stopLoadingProgress();
+      if (showComplete !== false) {
+        var pctEl = el.querySelector('.bot-loading-pct');
+        var barEl = el.querySelector('.bot-loading-bar-fill');
+        var trackEl = el.querySelector('.bot-loading-track');
+        if (pctEl) pctEl.textContent = '100%';
+        if (barEl) barEl.style.width = '100%';
+        if (trackEl) trackEl.setAttribute('aria-valuenow', '100');
+        setStatus('Complete — 100%');
+        setTimeout(function() { el.remove(); }, 200);
+        return;
+      }
+      el.remove();
+    }
+
+    function appendBotBubble(answer, products, suggestions) {
+      var botRow = document.createElement('div');
+      botRow.className = 'msg-row bot-row';
+      botRow.innerHTML = '<div class="msg-avatar bot-avatar">S</div><div class="msg-content bot-content"></div>';
+      var contentEl = botRow.querySelector('.msg-content');
+      var textEl = document.createElement('div');
+      textEl.className = 'bot-text';
+      textEl.textContent = answer || '';
+      contentEl.appendChild(textEl);
+      appendProductCards(contentEl, products);
+      if (suggestions && suggestions.length > 0) {
+        var sugLabel = document.createElement('p');
+        sugLabel.className = 'suggestions-label';
+        sugLabel.textContent = 'You can ask these:';
+        contentEl.appendChild(sugLabel);
+        var sugMenu = document.createElement('div');
+        sugMenu.className = 'suggestion-menu';
+        suggestions.forEach(function(s) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'suggestion-menu-btn';
+          btn.setAttribute('data-q', s);
+          btn.textContent = s;
+          btn.addEventListener('click', function() { sendQuestion(btn.getAttribute('data-q')); });
+          sugMenu.appendChild(btn);
+        });
+        contentEl.appendChild(sugMenu);
+      }
+      messagesEl.appendChild(botRow);
+      scrollToLatestMessage();
+    }
+
+    function applyChatResponse(q, data) {
+      var answer = data.answer || 'No answer.';
+      var products = data.products || [];
+      var suggestions = data.suggestions || [];
+      var chat = findChat(currentChatId);
+      if (chat) {
+        if (chat.title === 'New chat') chat.title = q.slice(0, 40) + (q.length > 40 ? '…' : '');
+        chat.messages.push({ question: q, answer: answer, products: products, suggestions: suggestions });
+        chat.updatedAt = Date.now();
+      }
+      appendBotBubble(answer, products, suggestions);
+      setStatus('');
+    }
+
+    function askLocalNlp(q) {
+      if (!window.SmartFitaoChatEngine) {
+        return Promise.reject(new Error('Chat engine not loaded'));
+      }
+      return window.SmartFitaoChatEngine.handleChat(q).then(function(result) {
+        if (result.error) return { ok: false, data: { error: result.error } };
+        return { ok: true, data: result.body || {}, local: true };
+      });
+    }
+
+    function askRemoteApi(q) {
+      return fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      }).then(function(res) {
+        var ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.indexOf('application/json') === -1) return { ok: false, skipLocal: false };
+        return res.json().then(function(data) {
+          return { ok: res.ok, data: data };
+        }).catch(function() {
+          return { ok: false, data: { error: 'Invalid response from server' } };
+        });
+      });
+    }
+
+    function sendQuestion(q) {
+      q = (q || questionEl.value.trim()).trim();
+      if (!q) return;
+      if (!currentChatId) createChat();
+      questionEl.value = '';
+      askBtn.disabled = true;
+      setStatus('Searching... 0%');
+
+      appendUserBubble(q);
+      appendBotLoadingRow();
+
+      askRemoteApi(q)
+        .then(function(result) {
+          if (result && result.ok && result.data && result.data.answer) return result;
+          return askLocalNlp(q).then(function(local) {
+            return local;
+          });
+        })
+        .catch(function() {
+          return askLocalNlp(q);
+        })
+        .then(function(result) {
+          removeBotLoadingRow(true);
+          setTimeout(function() {
+            if (!result || !result.ok) {
+              var err = (result && result.data && result.data.error) || 'Request failed';
+              appendBotBubble('Error: ' + err, [], DEFAULT_CHAT_SUGGESTIONS.slice());
+              setStatus('Error: ' + err, true);
+              return;
+            }
+            applyChatResponse(q, result.data);
+            if (result.local) {
+              apiStatusEl.textContent = 'On-device NLP';
+              apiStatusEl.className = 'api-status ok';
+            }
+          }, 220);
+        })
+        .catch(function() {
+          removeBotLoadingRow(true);
+          setTimeout(function() {
+            appendBotBubble('Chat could not start. Check your internet connection and try again.', [], DEFAULT_CHAT_SUGGESTIONS.slice());
+            setStatus('Chat unavailable.', true);
+          }, 220);
+        })
+        .finally(function() { askBtn.disabled = false; });
+    }
+
+    document.getElementById('new-chat-btn').addEventListener('click', createChat);
+
+    document.getElementById('prev-chat-btn').addEventListener('click', function() {
+      renderHistoryList();
+      openModal(historyModal);
+    });
+
+    document.getElementById('trending-btn').addEventListener('click', function() {
+      renderTrendingList();
+      openModal(trendingModal);
+    });
+
+    document.getElementById('history-modal-close').addEventListener('click', closeModals);
+    document.getElementById('trending-modal-close').addEventListener('click', closeModals);
+
+    historyModal.addEventListener('click', function(e) {
+      if (e.target === historyModal) closeModals();
+    });
+    trendingModal.addEventListener('click', function(e) {
+      if (e.target === trendingModal) closeModals();
+    });
+
+    askBtn.addEventListener('click', function() { sendQuestion(); });
+    questionEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+    });
+
+    if (window.location.protocol === 'file:') {
+      var warn = document.createElement('div');
+      warn.className = 'file-protocol-warn';
+      warn.innerHTML = 'Open <a href="http://localhost:5000">http://localhost:5000</a> in your browser (run <code>python main.py</code> first).';
+      document.body.insertBefore(warn, document.body.firstChild);
+    }
+
+    if (window.SmartFitaoChatEngine) {
+      window.SmartFitaoChatEngine.preload().then(function() {
+        apiStatusEl.textContent = 'Ready';
+        apiStatusEl.className = 'api-status ok';
+      });
+    }
+
+    fetch(HEALTH_URL, { method: 'GET' }).then(function(r) {
+      var ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (r.ok && ct.indexOf('application/json') !== -1) {
+        apiStatusEl.textContent = 'Cloud API';
+        apiStatusEl.className = 'api-status ok';
+      }
+    }).catch(function() {});
+
+    var params = new URLSearchParams(window.location.search);
+    if (params.get('embed') === '1') document.body.classList.add('embed-mode');
+    if (params.get('mobile') === '1') document.body.classList.add('mobile-mode');
+
+    renderHomeSuggestions();
+    renderTrendingList();
+    createChat();
+  </script>
+</body>
+</html>

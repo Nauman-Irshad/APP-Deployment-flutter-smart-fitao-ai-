@@ -3,8 +3,8 @@ import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'orders_page.dart';
 import '../Order-Tracking-System/firebase_pages.dart';
+import '../Order-Tracking-System/seller_tracking_order.dart';
 import '../Order-Tracking-System/services/app_backend.dart';
 
 class SellerCenterScreen extends StatefulWidget {
@@ -494,7 +494,7 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const OrdersPage(initialFilter: 'Pending'),
+                                    builder: (_) => const SellerOrdersPageFirebase(),
                                   ),
                                 );
                               },
@@ -526,7 +526,7 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const OrdersPage(initialFilter: 'Shipped'),
+                                    builder: (_) => const SellerOrdersPageFirebase(),
                                   ),
                                 );
                               },
@@ -545,7 +545,7 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => const OrdersPage(initialFilter: 'Delivered'),
+                                    builder: (_) => const SellerOrdersPageFirebase(),
                                   ),
                                 );
                               },

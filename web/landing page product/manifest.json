@@ -1,0 +1,68 @@
+{
+  "generatedAt": "2026-05-28T10:49:30.210Z",
+  "baseUrl": "/landing page product",
+  "categories": [
+    {
+      "key": "kurta",
+      "title": "kurta",
+      "models": [
+        {
+          "name": "black kurta .glb",
+          "url": "/landing%20page%20product/kurta/black%20kurta%20.glb"
+        },
+        {
+          "name": "brown kurta.glb",
+          "url": "/landing%20page%20product/kurta/brown%20kurta.glb"
+        },
+        {
+          "name": "sky blue kurta.glb",
+          "url": "/landing%20page%20product/kurta/sky%20blue%20kurta.glb"
+        }
+      ]
+    },
+    {
+      "key": "shalwar kameez",
+      "title": "shalwar kameez",
+      "models": [
+        {
+          "name": "black shalwar kameez.glb",
+          "url": "/landing%20page%20product/shalwar%20kameez/black%20shalwar%20kameez.glb"
+        },
+        {
+          "name": "brown 1.glb",
+          "url": "/landing%20page%20product/shalwar%20kameez/brown%201.glb"
+        },
+        {
+          "name": "white shalwar kameez.glb",
+          "url": "/landing%20page%20product/shalwar%20kameez/white%20shalwar%20kameez.glb"
+        }
+      ]
+    }
+  ],
+  "all": [
+    {
+      "name": "black kurta .glb",
+      "url": "/landing%20page%20product/kurta/black%20kurta%20.glb"
+    },
+    {
+      "name": "brown kurta.glb",
+      "url": "/landing%20page%20product/kurta/brown%20kurta.glb"
+    },
+    {
+      "name": "sky blue kurta.glb",
+      "url": "/landing%20page%20product/kurta/sky%20blue%20kurta.glb"
+    },
+    {
+      "name": "black shalwar kameez.glb",
+      "url": "/landing%20page%20product/shalwar%20kameez/black%20shalwar%20kameez.glb"
+    },
+    {
+      "name": "brown 1.glb",
+      "url": "/landing%20page%20product/shalwar%20kameez/brown%201.glb"
+    },
+    {
+      "name": "white shalwar kameez.glb",
+      "url": "/landing%20page%20product/shalwar%20kameez/white%20shalwar%20kameez.glb"
+    }
+  ]
+}

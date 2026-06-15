@@ -1,165 +1,196 @@
 import 'package:flutter/material.dart';
 import 'chat.dart';
 import 'reel.dart';
+import 'reel_media.dart';
+
+const Map<String, dynamic> kFeaturedTailorProfile = {
+  'name': 'Cotton King Tailors',
+  'image': 'assets/banner 1.png',
+  'address': 'Shop 12, Liberty Market, Gulberg III, Lahore',
+};
 
 class TailorPortfolioScreen extends StatelessWidget {
   final Map<String, dynamic> tailor;
 
   const TailorPortfolioScreen({
     super.key,
-    this.tailor = const {
-      'name': 'Master Tailor John',
-      'image': 'assets/3.webp',
-      'rating': 4.8,
-      'about': 'Expert in men\'s bespoke tailoring with over 15 years of experience. Specializing in Sherwani and Shalwar Kameez.',
-    },
+    this.tailor = kFeaturedTailorProfile,
   });
+
+  List<ReelCatalogItem> get _shopReels {
+    final shop = tailor['name']?.toString() ?? '';
+    return reelsForTailor(shop);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final name = tailor['name']?.toString() ?? 'Tailor';
+    final image = tailor['image']?.toString() ?? 'assets/banner 1.png';
+    final address = tailor['address']?.toString() ??
+        tailor['location']?.toString() ??
+        'Lahore, Pakistan';
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text("Tailor Profile"),
+        title: const Text('Tailor Profile'),
         backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
       ),
       body: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            
             Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
               child: Row(
-                children: [
-                   CircleAvatar(
-                     radius: 40,
-                     backgroundImage: AssetImage(tailor['image']),
-                   ),
-                   SizedBox(width: 20),
-                   Expanded(
-                     child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Text(
-                           tailor['name'],
-                           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                         ),
-                         SizedBox(height: 5),
-                         Row(
-                           children: [
-                             Icon(Icons.star, color: Colors.amber, size: 20),
-                             SizedBox(width: 5),
-                             Text(tailor['rating'].toString(), style: TextStyle(fontWeight: FontWeight.bold)),
-                             Text(" (120 orders)", style: TextStyle(color: Colors.grey)),
-                           ],
-                         ),
-                       ],
-                     ),
-                   ),
-                ],
-              ),
-            ),
-            
-            
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                         Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen()));
-                      },
-                      icon: Icon(Icons.message, color: Colors.white),
-                      label: Text("Message", style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFF059669), 
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {},
-                      child: Text("Follow", style: TextStyle(color: Colors.black)),
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            SizedBox(height: 25),
-            
-            
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("About", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text(
-                    tailor['about'],
-                    style: TextStyle(color: Colors.grey[700], height: 1.5),
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundImage: AssetImage(image),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.location_on_outlined,
+                                size: 18, color: Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                address,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            
-            SizedBox(height: 25),
-            
-            
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Text("Work Showcase", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            ),
-            SizedBox(height: 15),
-            
-            
-            GestureDetector(
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => ReelScreen()));
-              },
-              child: Container(
-                margin: EdgeInsets.symmetric(horizontal: 20),
-                height: 350,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  color: Colors.black,
-                  image: DecorationImage(
-                    image: AssetImage('assets/6.webp'), 
-                    fit: BoxFit.cover,
-                    colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.3), BlendMode.darken),
-                  ),
-                ),
-                child: Center(
-                  child: Container(
-                    padding: EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => ChatScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.message, color: Colors.white),
+                  label: const Text('Message', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.play_arrow, color: Colors.white, size: 40),
                   ),
                 ),
               ),
             ),
+            const Divider(height: 1),
             Padding(
-               padding: const EdgeInsets.all(20.0),
-               child: Text("Tailored Suits Collection 2023", style: TextStyle(fontWeight: FontWeight.bold)),
+              padding: const EdgeInsets.all(12),
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 0.52,
+                ),
+                itemCount: _shopReels.length,
+                itemBuilder: (context, index) {
+                  final reel = _shopReels[index];
+                  return GestureDetector(
+                    onTap: () {
+                      final start = kReelCatalog.indexOf(reel);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ReelScreen(
+                            embeddedInTab: false,
+                            initialIndex: start < 0 ? 0 : start,
+                            active: true,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.asset(
+                                  reel.posterAsset,
+                                  fit: BoxFit.cover,
+                                ),
+                                Container(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                ),
+                                const Center(
+                                  child: Icon(
+                                    Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 36,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          reel.shopName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          reel.videoTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

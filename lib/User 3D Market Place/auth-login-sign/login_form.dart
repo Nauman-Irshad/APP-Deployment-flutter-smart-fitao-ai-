@@ -1,8 +1,13 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'auth_flow.dart';
-import '../3d_marketplace.dart';
+
+import '../../../Order-Tracking-System/services/app_backend.dart';
+import '../../../Order-Tracking-System/auth_reset_memory.dart';
+import '../../../Order-Tracking-System/auth_validators.dart';
 import '../../Tailor/botm_navi.dart';
 import '../../seller_dashboard/bottom_navi.dart';
+import '../3d_marketplace.dart';
+import 'auth_flow.dart';
 
 class LoginFormScreen extends StatefulWidget {
   final UserType userType;
@@ -11,7 +16,8 @@ class LoginFormScreen extends StatefulWidget {
   final VoidCallback onRegister;
   final VoidCallback onBack;
 
-  LoginFormScreen({
+  const LoginFormScreen({
+    super.key,
     required this.userType,
     required this.onSuccess,
     required this.onForgotPassword,
@@ -20,13 +26,14 @@ class LoginFormScreen extends StatefulWidget {
   });
 
   @override
-  _LoginFormScreenState createState() => _LoginFormScreenState();
+  State<LoginFormScreen> createState() => _LoginFormScreenState();
 }
 
 class _LoginFormScreenState extends State<LoginFormScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _showPassword = false;
+  bool _isLoading = false;
 
   String _getUserTypeLabel() {
     switch (widget.userType) {
@@ -39,12 +46,95 @@ class _LoginFormScreenState extends State<LoginFormScreen> {
     }
   }
 
+  String get _expectedRole {
+    switch (widget.userType) {
+      case UserType.user:
+        return 'user';
+      case UserType.tailor:
+        return 'tailor';
+      case UserType.seller:
+        return 'seller';
+    }
+  }
+
+  Future<void> _signIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    final emailErr = AuthValidators.validateEmail(email);
+    final passErr = AuthValidators.validatePassword(password);
+    if (emailErr != null || passErr != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(emailErr ?? passErr!)),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final uid = AppBackend.instance.currentUid;
+      final profile = await AppBackend.instance.getUserProfile(uid);
+
+      if (profile.role != _expectedRole) {
+        await FirebaseAuth.instance.signOut();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('This account is not a $_expectedRole account.'),
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      await AuthResetMemory.saveLastRole(_expectedRole);
+
+      final Widget destination;
+      switch (widget.userType) {
+        case UserType.user:
+          destination = const MarketPlace3D();
+          break;
+        case UserType.tailor:
+          destination = const BotmNavScreen();
+          break;
+        case UserType.seller:
+          destination = const BottomNavScreen();
+          break;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => destination),
+      );
+      widget.onSuccess();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login failed: ${e.message ?? e.code}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -59,217 +149,131 @@ class _LoginFormScreenState extends State<LoginFormScreen> {
         ),
         child: Stack(
           children: [
-
-            Positioned(
-              top: -100,
-              right: -100,
-              child: Container(
-                width: 400,
-                height: 400,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Color(0xFF065f46).withOpacity(0.3),
-                      Color(0xFF047857).withOpacity(0.2),
-                      Color(0xFF059669).withOpacity(0.1),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -150,
-              left: -150,
-              child: Container(
-                width: 500,
-                height: 500,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Color(0xFF065f46).withOpacity(0.25),
-                      Color(0xFF047857).withOpacity(0.15),
-                      Color(0xFF059669).withOpacity(0.08),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 200,
-              left: -50,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Color(0xFF047857).withOpacity(0.2),
-                      Color(0xFF059669).withOpacity(0.1),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
             SafeArea(
               child: Center(
                 child: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: TextButton.icon(
-                    onPressed: widget.onBack,
-                    icon: Icon(Icons.arrow_back, size: 20, color: Colors.white),
-                    label: Text(
-                      'Back',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-                SizedBox(height: 20),
-
-                Container(
-                  width: double.infinity,
-                  constraints: BoxConstraints(maxWidth: 400),
-                  padding: EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: Offset(0, 10),
-                      ),
-                    ],
-                  ),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-
-                      Text(
-                        'Welcome Back',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Sign in as ${_getUserTypeLabel()}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      SizedBox(height: 32),
-
-                      _buildTextField(
-                        label: 'Email Address / Username',
-                        controller: _emailController,
-                        icon: Icons.person_outline,
-                        hint: 'Enter your email or username',
-                        keyboardType: TextInputType.text,
-                      ),
-                      SizedBox(height: 20),
-
-                      _buildPasswordField(),
-                      SizedBox(height: 12),
-
                       Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                            onPressed: () => widget.onForgotPassword(_emailController.text),
-                            child: Text(
-                              'Forgot Password?',
-                              style: TextStyle(color: Color(0xFF065f46)),
-                            ),
+                        alignment: Alignment.topLeft,
+                        child: TextButton.icon(
+                          onPressed: widget.onBack,
+                          icon: const Icon(Icons.arrow_back, size: 20, color: Colors.white),
+                          label: const Text('Back', style: TextStyle(color: Colors.white)),
                         ),
                       ),
-                      SizedBox(height: 24),
-
-                      SizedBox(
+                      const SizedBox(height: 20),
+                      Container(
                         width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-
-                            Widget destinationScreen;
-                            switch (widget.userType) {
-                              case UserType.user:
-                                destinationScreen = const MarketPlace3D();
-                                break;
-                              case UserType.tailor:
-                                destinationScreen = const BotmNavScreen();
-                                break;
-                              case UserType.seller:
-                                destinationScreen = const BottomNavScreen();
-                                break;
-                            }
-
-
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => destinationScreen),
-                            );
-
-
-                            widget.onSuccess();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFF065f46),
-                            foregroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        padding: const EdgeInsets.all(32),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
-                            elevation: 4,
-                          ),
-                          child: Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          ],
                         ),
-                      ),
-                      SizedBox(height: 24),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Don\'t have an account? ',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                          TextButton(
-                            onPressed: widget.onRegister,
-                            child: Text(
-                              'Register Now',
-                              style: TextStyle(color: Color(0xFF065f46)),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Welcome Back',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            Text(
+                              'Sign in as ${_getUserTypeLabel()}',
+                              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 32),
+                            _buildTextField(
+                              label: 'Email Address',
+                              controller: _emailController,
+                              icon: Icons.person_outline,
+                              hint: 'Enter your email',
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                            const SizedBox(height: 20),
+                            _buildPasswordField(),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () => widget.onForgotPassword(_emailController.text),
+                                child: const Text(
+                                  'Forgot Password?',
+                                  style: TextStyle(color: Color(0xFF065f46)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : _signIn,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF065f46),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 4,
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Sign In',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Don\'t have an account? ',
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                                TextButton(
+                                  onPressed: widget.onRegister,
+                                  child: const Text(
+                                    'Register Now',
+                                    style: TextStyle(color: Color(0xFF065f46)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -285,29 +289,17 @@ class _LoginFormScreenState extends State<LoginFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[200]!),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TextField(
-            controller: controller,
-            keyboardType: keyboardType,
-            decoration: InputDecoration(
-              hintText: hint,
-              prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            ),
+        Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, color: Colors.grey),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
         ),
       ],
@@ -318,41 +310,21 @@ class _LoginFormScreenState extends State<LoginFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Password',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey[700],
-          ),
-        ),
-        SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey[200]!),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: TextField(
-            controller: _passwordController,
-            obscureText: !_showPassword,
-            decoration: InputDecoration(
-              hintText: 'Enter your password',
-              prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[400], size: 20),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _showPassword ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.grey[400],
-                  size: 20,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _showPassword = !_showPassword;
-                  });
-                },
-              ),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        Text('Password', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey[700])),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _passwordController,
+          obscureText: !_showPassword,
+          decoration: InputDecoration(
+            hintText: 'Enter your password',
+            prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+            suffixIcon: IconButton(
+              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
             ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            filled: true,
+            fillColor: Colors.grey[50],
           ),
         ),
       ],

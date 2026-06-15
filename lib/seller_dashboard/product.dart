@@ -1,8 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../Order-Tracking-System/firebase_pages.dart';
 import '../Order-Tracking-System/services/app_backend.dart';
+import 'seller_add_product_screen.dart';
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -43,11 +43,11 @@ class _ProductsScreenState extends State<ProductsScreen>
         ),
         actions: [
           GestureDetector(
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push<bool>(
                 context,
-                MaterialPageRoute<void>(
-                  builder: (_) => const SellerProductsPageFirebase(),
+                MaterialPageRoute(
+                  builder: (_) => const SellerAddProductScreen(),
                 ),
               );
             },
@@ -59,6 +59,21 @@ class _ProductsScreenState extends State<ProductsScreen>
           const SizedBox(width: 10),
         ],
       ),
+      floatingActionButton: uid == null
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SellerAddProductScreen(),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFF059669),
+              icon: const Icon(Icons.add),
+              label: const Text('Add product'),
+            ),
       body: uid == null
           ? const Center(
               child: Text(
@@ -84,7 +99,7 @@ class _ProductsScreenState extends State<ProductsScreen>
                   );
                 }
 
-                final all = snapshot.data ?? [];
+                final all = List<ProductModel>.from(snapshot.data ?? const []);
                 final active = all.where((p) => !p.isOutOfStock).toList();
                 final inactive = all.where((p) => p.isOutOfStock).toList();
 

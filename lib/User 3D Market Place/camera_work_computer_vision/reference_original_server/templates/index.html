@@ -1,0 +1,2647 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Human Pose Auto-Capture</title>
+    <script>
+        (function () {
+            var p = new URLSearchParams(location.search);
+            var inFrame = false;
+            try { inFrame = window.self !== window.top; } catch (e) { inFrame = true; }
+            if (p.has('flutter_embed') || p.get('auto_start') === '1' || inFrame) {
+                document.documentElement.classList.add('app-auto-camera');
+            }
+            if (p.has('tryon_return') || p.get('tryon_return')) {
+                document.documentElement.classList.add('has-tryon-return');
+            }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <!-- MediaPipe Pose (pinned — unversioned CDN breaks Pose / POSE_CONNECTIONS on Edge) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils@0.6.1675469240/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
+
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #app-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #111;
+        }
+
+        /* ----- DESKTOP VIEW ----- */
+        #desktop-view {
+            display: none !important;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1e1e2f, #11111a);
+            z-index: 50;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .desktop-content {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 60px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+        }
+
+        .desktop-title {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .desktop-subtitle {
+            font-size: 1.1rem;
+            color: #aaa;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .desktop-qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            display: inline-block;
+            margin-bottom: 30px;
+        }
+
+        .desktop-qr-container img {
+            width: 250px;
+            height: 250px;
+        }
+
+        .desktop-url {
+            font-size: 1.2rem;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px 24px;
+            border-radius: 12px;
+            color: #60a5fa;
+            user-select: all;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 12px 28px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 20px;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        /* ----- MOBILE/CAMERA VIEW ----- */
+        #mobile-view {
+            display: block !important;
+            /* Always active now (desktop QR gate removed) */
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        video {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            transform: scaleX(-1);
+            /* Default Front Camera Mirror */
+        }
+
+        #overlay-canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            transform: scaleX(-1);
+            /* Default Front Camera Mirror */
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .ui-content {
+            pointer-events: auto;
+        }
+
+        .instructions-panel {
+            margin-top: 60px;
+            align-self: center;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .instructions-panel.good {
+            background: rgba(34, 197, 94, 0.8);
+            color: white;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+            transform: scale(1.05);
+        }
+
+        .instructions-panel.countdown {
+            background: rgba(234, 179, 8, 0.9);
+            font-size: 1.5rem;
+            padding: 16px 32px;
+            box-shadow: 0 0 20px rgba(234, 179, 8, 0.5);
+        }
+
+        /* Results Panel */
+        .result-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 20;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .result-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            width: 80%;
+            max-width: 400px;
+            transform: translateY(20px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        .result-panel.show {
+            transform: translateY(0);
+        }
+
+        .result-panel.success {
+            border-top: 5px solid #22c55e;
+        }
+
+        .result-panel.fail {
+            border-top: 5px solid #ef4444;
+        }
+
+        .result-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0 0 10px 0;
+        }
+
+        .result-subtitle {
+            color: #ccc;
+            margin-bottom: 25px;
+        }
+
+        .result-subtitle.ok {
+            color: #22c55e;
+            font-weight: 700;
+        }
+
+        .loader-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #snapshot-preview {
+            width: 100%;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            display: none;
+            max-height: min(52vh, 360px);
+            object-fit: contain;
+            background: #000;
+        }
+
+        .btn-tryon-2d {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
+            font-weight: 800;
+            margin-top: 0;
+        }
+
+        .btn-go-tryon {
+            display: none;
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 15;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #fff;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+            box-shadow: 0 4px 14px rgba(5, 150, 105, 0.45);
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
+        .btn-go-tryon:active {
+            transform: scale(0.97);
+        }
+
+        html.app-auto-camera .btn-go-tryon,
+        html.has-tryon-return .btn-go-tryon {
+            display: block;
+        }
+
+        html.app-auto-camera #move-3d-result {
+            display: none !important;
+        }
+
+        .top-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            border: none;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .icon-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        #debug-info {
+            position: absolute;
+            bottom: 100px;
+            left: 10px;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* Manual capture — always tappable; subtitle hints at alignment */
+        .shutter-wrap {
+            align-self: center;
+            margin-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+            z-index: 12;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .shutter-btn {
+            min-width: 240px;
+            padding: 16px 32px;
+            border-radius: 999px;
+            border: 3px solid rgba(255, 255, 255, 0.25);
+            font-family: inherit;
+            font-weight: 800;
+            font-size: 1.05rem;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            transition: transform 0.15s ease, filter 0.2s ease, opacity 0.2s ease;
+        }
+
+        .shutter-btn:active {
+            transform: scale(0.97);
+        }
+
+        .shutter-btn--ok {
+            background: linear-gradient(180deg, #4ade80, #16a34a);
+            color: #052e16;
+        }
+
+        .shutter-btn--bad {
+            background: linear-gradient(180deg, #f87171, #b91c1c);
+            color: #fff;
+        }
+
+        /* 30+ landmarks but still need pose or your-details — not tappable */
+        .shutter-btn--progress {
+            background: linear-gradient(180deg, #fbbf24, #d97706);
+            color: #422006;
+        }
+
+        .shutter-btn[aria-disabled="true"] {
+            cursor: not-allowed;
+        }
+
+        .shutter-btn--ok[aria-disabled="true"] {
+            opacity: 0.78;
+            filter: saturate(0.92);
+        }
+
+        .pre-capture-countdown {
+            position: absolute;
+            inset: 0;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.72);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .pre-capture-countdown.is-visible {
+            display: flex;
+        }
+
+        .pre-capture-countdown-card {
+            text-align: center;
+            padding: min(6vh, 48px) min(5vw, 28px);
+            max-width: 100%;
+        }
+
+        .pre-capture-label {
+            font-size: clamp(1.1rem, 4.2vw, 1.85rem);
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
+            margin-bottom: clamp(8px, 2vh, 20px);
+        }
+
+        .pre-capture-big-num {
+            font-size: clamp(5.5rem, 42vmin, 14rem);
+            font-weight: 900;
+            line-height: 0.95;
+            color: #fef08a;
+            font-variant-numeric: tabular-nums;
+            text-shadow:
+                0 0 48px rgba(250, 204, 21, 0.95),
+                0 0 120px rgba(234, 179, 8, 0.55),
+                0 6px 28px rgba(0, 0, 0, 0.9);
+            animation: pre-capture-pulse 0.85s ease-in-out infinite;
+        }
+
+        .pre-capture-big-num--done {
+            font-size: clamp(3rem, 22vmin, 7rem);
+            color: #86efac;
+            text-shadow:
+                0 0 40px rgba(74, 222, 128, 0.85),
+                0 6px 28px rgba(0, 0, 0, 0.9);
+            animation: none;
+        }
+
+        @keyframes pre-capture-pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.06);
+            }
+        }
+
+        .shutter-line2 {
+            font-size: 0.78rem;
+            font-weight: 700;
+            opacity: 0.95;
+        }
+
+        /* Top-right: height / weight / age */
+        .anthro-box {
+            position: fixed;
+            top: 52px;
+            right: max(8px, env(safe-area-inset-right, 8px));
+            width: min(186px, 34vw);
+            padding: 12px 12px 10px;
+            background: rgba(15, 23, 42, 0.94);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid rgba(148, 163, 184, 0.4);
+            border-radius: 14px;
+            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 15;
+        }
+
+        .anthro-box-title {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin: 0 0 2px 0;
+        }
+
+        .anthro-box label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+
+        .anthro-box input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 9px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            background: rgba(255, 255, 255, 0.97);
+            color: #0f172a;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .meta-hint {
+            font-size: 0.62rem;
+            font-weight: 600;
+            color: #fde047;
+            text-align: center;
+            line-height: 1.35;
+            margin: 0;
+        }
+
+        /* Hidden in app — values still filled from URL query params */
+        html.app-auto-camera #anthro-box {
+            display: none !important;
+        }
+
+        html.app-auto-camera #debug-info {
+            display: none !important;
+        }
+
+        html.app-auto-camera #instructions {
+            display: none !important;
+        }
+
+        .landmarks-toggle-btn {
+            position: fixed;
+            right: max(10px, env(safe-area-inset-right, 10px));
+            top: max(52px, env(safe-area-inset-top, 52px));
+            z-index: 20;
+            padding: 10px 14px;
+            border: none;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.88);
+            color: #e2e8f0;
+            font-size: 0.75rem;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+        }
+
+        .landmarks-toggle-btn.is-open {
+            background: #059669;
+            color: #fff;
+        }
+
+        /* Landmark chart — hidden until toggle (clean camera) */
+        .accuracy-panel {
+            position: fixed;
+            left: max(6px, env(safe-area-inset-left, 6px));
+            top: 52px;
+            bottom: 120px;
+            width: min(240px, 92vw);
+            max-height: calc(100vh - 170px);
+            padding: 12px 10px;
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 2px solid rgba(148, 163, 184, 0.4);
+            border-radius: 14px;
+            box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 19;
+            overflow: hidden;
+        }
+
+        .accuracy-panel.is-open {
+            display: flex;
+        }
+
+        .lm-chart-bar-wrap {
+            flex-shrink: 0;
+        }
+
+        .lm-chart-bar-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .lm-chart-bar-track {
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(239, 68, 68, 0.35);
+            overflow: hidden;
+        }
+
+        .lm-chart-bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #22c55e, #38bdf8);
+            transition: width 0.2s ease;
+        }
+
+        @media (max-width: 640px) {
+            .landmarks-toggle-btn {
+                top: auto;
+                bottom: max(108px, calc(100px + env(safe-area-inset-bottom, 0px)));
+            }
+
+            .accuracy-panel.is-open {
+                left: 0;
+                right: 0;
+                top: auto;
+                bottom: 0;
+                width: 100%;
+                max-height: min(50vh, 420px);
+                border-radius: 16px 16px 0 0;
+            }
+        }
+
+        .accuracy-panel-title {
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            flex-shrink: 0;
+        }
+
+        .accuracy-checks {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .acc-check-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #e2e8f0;
+            line-height: 1.2;
+        }
+
+        .acc-check-row span:first-child {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .acc-status {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .acc-status.ok {
+            background: #22c55e;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.65);
+        }
+
+        .acc-status.bad {
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+
+        .landmark-mini-title {
+            font-size: 0.62rem;
+            font-weight: 800;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            margin-top: 4px;
+            flex-shrink: 0;
+        }
+
+        .landmark-grid {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 5px 4px;
+            padding-right: 4px;
+        }
+
+        .lm-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 4px 2px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.28);
+            min-width: 0;
+        }
+
+        .lm-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            transition: background 0.12s ease;
+        }
+
+        .lm-dot.ok {
+            background: #22c55e;
+        }
+
+        .lm-dot.bad {
+            background: #ef4444;
+        }
+
+        .lm-name {
+            font-size: 0.55rem;
+            font-weight: 600;
+            color: #94a3b8;
+            text-align: center;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            line-height: 1.1;
+        }
+
+        .start-btn {
+            background: #3b82f6;
+            color: white;
+            padding: 16px 36px;
+            font-size: 1.05rem;
+            border-radius: 30px;
+            border: none;
+            font-weight: bold;
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.5);
+            cursor: pointer;
+            margin-top: 24px;
+            width: min(92%, 380px);
+            align-self: center;
+        }
+
+        .start-btn:disabled {
+            opacity: 0.65;
+            cursor: wait;
+        }
+
+        .camera-error-box {
+            display: none;
+            max-width: 420px;
+            margin: 16px auto 0;
+            padding: 14px 16px;
+            border-radius: 12px;
+            background: rgba(127, 29, 29, 0.92);
+            border: 1px solid rgba(248, 113, 113, 0.7);
+            color: #fecaca;
+            text-align: left;
+        }
+
+        .camera-error-box.visible {
+            display: block;
+        }
+
+        .camera-error-box strong {
+            display: block;
+            color: #fff;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+
+        .camera-error-box p {
+            margin: 0 0 10px 0;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            color: #fecaca;
+        }
+
+        .camera-error-box .retry-btn {
+            background: #fff;
+            color: #991b1b;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 18px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #pre-camera-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+            background: #000;
+            z-index: 120;
+            position: absolute;
+            overflow-y: auto;
+            padding: 24px 16px 32px;
+            box-sizing: border-box;
+            pointer-events: auto;
+        }
+
+        #pre-camera-screen.is-hidden,
+        html.app-auto-camera #pre-camera-screen {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        #camera-loading-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 125;
+            background: rgba(0, 0, 0, 0.92);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            pointer-events: none;
+        }
+
+        #camera-loading-overlay.is-visible {
+            display: flex;
+        }
+
+        .camera-loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: cam-spin 0.8s linear infinite;
+        }
+
+        @keyframes cam-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .pre-camera-title {
+            text-align: center;
+            margin: 0 0 8px 0;
+            font-size: clamp(1.35rem, 4.2vw, 1.75rem);
+            font-weight: 800;
+            color: #fff;
+        }
+
+        .pre-camera-why {
+            text-align: center;
+            color: #cbd5e1;
+            font-size: clamp(0.9rem, 2.8vw, 1rem);
+            line-height: 1.55;
+            max-width: 420px;
+            margin: 0 auto 20px;
+            padding: 0 8px;
+        }
+
+        .pre-camera-why strong {
+            color: #86efac;
+            font-weight: 700;
+        }
+
+        .pre-camera-section {
+            max-width: 440px;
+            margin: 0 auto;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+
+        .pre-camera-section-title {
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        .pre-camera-list {
+            margin: 0;
+            padding-left: 1.15rem;
+            color: #e2e8f0;
+            font-size: clamp(0.85rem, 2.6vw, 0.95rem);
+            line-height: 1.5;
+        }
+
+        .pre-camera-list li {
+            margin-bottom: 8px;
+        }
+
+        .pre-camera-list li:last-child {
+            margin-bottom: 0;
+        }
+
+        .pre-camera-permission {
+            max-width: 440px;
+            margin: 16px auto 0;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(30, 58, 138, 0.45);
+            border: 1px solid rgba(96, 165, 250, 0.4);
+            color: #bfdbfe;
+            font-size: clamp(0.82rem, 2.5vw, 0.92rem);
+            line-height: 1.45;
+            text-align: center;
+        }
+
+        .pre-camera-permission strong {
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="app-container">
+
+        <!-- DESKTOP VIEW: ONLY QR CODE -->
+        <div id="desktop-view">
+            <div class="desktop-content">
+                <h1 class="desktop-title">Pose Auto-Capture</h1>
+                <p class="desktop-subtitle">This tool requires a device with a camera. Scan the QR code below using your
+                    phone's camera to seamlessly switch devices.</p>
+
+                <div class="desktop-qr-container">
+                    <img src="/qr" alt="Scan to open on phone">
+                </div>
+
+                <div class="desktop-url">{{ display_url }}</div>
+
+                <!-- Fallback button if detection fails -->
+                <button class="btn" id="force-camera-btn">I have a camera on this device</button>
+            </div>
+        </div>
+
+        <!-- MOBILE VIEW: CAMERA APP -->
+        <div id="mobile-view">
+            <!-- Pre-Start Screen for mobile so browser allows camera access on click -->
+            <div id="pre-camera-screen">
+                <h1 class="pre-camera-title">Ready to capture</h1>
+                <p id="pre-camera-why" class="pre-camera-why">
+                    We track <strong>33 body landmarks</strong> on you in real time to confirm a full human is in frame — not a flat guess. When enough points are green, we save <strong>one photo</strong> for your <strong>2D virtual try-on</strong> and size fitting.
+                </p>
+                <div class="pre-camera-section" aria-label="Pose guide">
+                    <div class="pre-camera-section-title">Pose guide — A-pose (for 33-point scan)</div>
+                    <ul class="pre-camera-list">
+                        <li>Stand <strong>full body</strong> in the highlighted box (head to feet).</li>
+                        <li><strong>Feet shoulder-width</strong>, weight even on both legs.</li>
+                        <li><strong>Arms slightly away</strong> from your sides (~30–45°), like a relaxed “T” — not pressed to your body.</li>
+                        <li><strong>Face the camera</strong>; bright, even light helps all 33 landmarks turn green.</li>
+                    </ul>
+                </div>
+                <p id="pre-camera-permission" class="pre-camera-permission">
+                    <strong>One tap:</strong> Edge will ask to <strong>Allow camera</strong> — then your webcam and <strong>33 landmark dots</strong> start automatically.
+                </p>
+                <button type="button" class="start-btn" id="start-camera-btn">Allow camera &amp; start</button>
+                <button type="button" class="btn-go-tryon" id="btn-go-2d-tryon-pre" style="margin-top:14px;position:relative;top:auto;left:auto;display:none;">Go to 2D Try On</button>
+                <div id="camera-error-box" class="camera-error-box" role="alert" aria-live="assertive">
+                    <strong id="camera-error-title">Camera failed</strong>
+                    <p id="camera-error-detail"></p>
+                    <button type="button" class="retry-btn" id="retry-camera-btn">Try again</button>
+                </div>
+            </div>
+
+            <div id="camera-loading-overlay" aria-live="polite">
+                <div class="camera-loading-spinner"></div>
+                <div id="camera-loading-text" style="color:#e2e8f0;font-weight:600;">Opening camera…</div>
+            </div>
+
+            <button type="button" id="btn-go-2d-tryon" class="btn-go-tryon ui-content" title="Open 2D kurta try-on app">Go to 2D Try On</button>
+
+            <!-- Live Camera feed -->
+            <video id="videoElement" playsinline autoplay muted></video>
+            <canvas id="overlay-canvas"></canvas>
+
+            <div id="debug-info">Initializing AI...</div>
+
+            <button type="button" id="btn-toggle-landmarks" class="landmarks-toggle-btn ui-content" style="display:none;" aria-expanded="false" aria-controls="accuracy-panel">
+                33 landmarks
+            </button>
+
+            <div id="accuracy-panel" class="accuracy-panel ui-content" aria-label="33 landmark chart" hidden>
+                <div class="accuracy-panel-title">33 body landmarks</div>
+                <div class="lm-chart-bar-wrap">
+                    <div class="lm-chart-bar-label">
+                        <span>Strong points</span>
+                        <span id="lm-chart-count">0 / 33</span>
+                    </div>
+                    <div class="lm-chart-bar-track">
+                        <div id="lm-chart-bar-fill" class="lm-chart-bar-fill"></div>
+                    </div>
+                </div>
+                <div class="accuracy-checks">
+                    <div class="acc-check-row"><span>Body in frame</span><span id="acc-status-body" class="acc-status bad" aria-hidden="true"></span></div>
+                    <div class="acc-check-row"><span>Posture</span><span id="acc-status-posture" class="acc-status bad" aria-hidden="true"></span></div>
+                    <div class="acc-check-row"><span>A-pose</span><span id="acc-status-apose" class="acc-status bad" aria-hidden="true"></span></div>
+                    <div class="acc-check-row"><span>Ready to capture</span><span id="acc-status-landmarks" class="acc-status bad" aria-hidden="true"></span></div>
+                </div>
+                <div class="landmark-mini-title">Each point</div>
+                <div id="landmark-grid" class="landmark-grid"></div>
+            </div>
+
+            <!-- Hidden — prefilled from app URL (height_cm, weight_kg, age) -->
+            <div id="anthro-box" class="anthro-box ui-content" aria-hidden="true" style="display:none !important;">
+                <input id="input-height-cm" type="hidden" />
+                <input id="input-weight-kg" type="hidden" />
+                <input id="input-age" type="hidden" />
+            </div>
+
+            <div class="ui-layer">
+                <div id="instructions" class="ui-content instructions-panel" style="display: none;">
+                    Step back so your full body is in the frame
+                </div>
+
+                <div class="top-controls ui-content" id="top-controls" style="display: none;">
+                    <button class="icon-btn" id="flip-camera-btn" title="Switch Front/Back Camera">
+                        🔄
+                    </button>
+                </div>
+
+                <div id="shutter-wrap" class="shutter-wrap ui-content">
+                    <button type="button" id="btn-capture-photo" class="shutter-btn shutter-btn--bad" aria-disabled="true">
+                        <span>Take photo</span>
+                        <span id="shutter-score" class="shutter-line2">Stand in frame — full body visible</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Full-screen 3 · 2 · 1 · Done before shutter -->
+            <div id="pre-capture-countdown" class="pre-capture-countdown ui-content" aria-live="assertive">
+                <div class="pre-capture-countdown-card">
+                    <div id="pre-capture-label" class="pre-capture-label">Taking picture</div>
+                    <div id="pre-capture-big-num" class="pre-capture-big-num">3</div>
+                </div>
+            </div>
+
+            <!-- Loading spinner overlay -->
+            <div id="loader-layer" class="loader-container">
+                <div class="loader"></div>
+                <div style="font-weight: 600;">Sending to Backend...</div>
+            </div>
+
+            <!-- Result overlay -->
+            <div id="result-backdrop" class="result-backdrop">
+                <div id="result-panel" class="result-panel">
+                    <img id="snapshot-preview" alt="Your captured photo" />
+                    <h2 id="result-title" class="result-title">Result</h2>
+                    <div id="result-subtitle" class="result-subtitle"></div>
+                    <button type="button" id="btn-2d-tryon" class="btn btn-tryon-2d" style="display: none;">Go to 2D Try On</button>
+                    <button id="move-3d-result" class="btn" style="margin-top: 10px;">Move to 3D avatar making</button>
+                    <button id="close-result" class="btn" style="margin-top: 10px;">Take another</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Strict pose schema: exactly these 33 keypoints (MediaPipe Pose order). -->
+    <script type="application/json" id="smart-fitao-pose-spec">
+{
+  "dataset_name": "Smart_Fitao_LivePose",
+  "schema_version": 1,
+  "total_keypoints": 33,
+  "min_landmark_visibility": 0.45,
+  "height_cm_range": [120, 230],
+  "weight_kg_range": [30, 250],
+  "age_range": [18, 100],
+  "keypoints": [
+    {"index": 0, "name": "nose"},
+    {"index": 1, "name": "left_eye_inner"},
+    {"index": 2, "name": "left_eye"},
+    {"index": 3, "name": "left_eye_outer"},
+    {"index": 4, "name": "right_eye_inner"},
+    {"index": 5, "name": "right_eye"},
+    {"index": 6, "name": "right_eye_outer"},
+    {"index": 7, "name": "left_ear"},
+    {"index": 8, "name": "right_ear"},
+    {"index": 9, "name": "mouth_left"},
+    {"index": 10, "name": "mouth_right"},
+    {"index": 11, "name": "left_shoulder"},
+    {"index": 12, "name": "right_shoulder"},
+    {"index": 13, "name": "left_elbow"},
+    {"index": 14, "name": "right_elbow"},
+    {"index": 15, "name": "left_wrist"},
+    {"index": 16, "name": "right_wrist"},
+    {"index": 17, "name": "left_pinky"},
+    {"index": 18, "name": "right_pinky"},
+    {"index": 19, "name": "left_index"},
+    {"index": 20, "name": "right_index"},
+    {"index": 21, "name": "left_thumb"},
+    {"index": 22, "name": "right_thumb"},
+    {"index": 23, "name": "left_hip"},
+    {"index": 24, "name": "right_hip"},
+    {"index": 25, "name": "left_knee"},
+    {"index": 26, "name": "right_knee"},
+    {"index": 27, "name": "left_ankle"},
+    {"index": 28, "name": "right_ankle"},
+    {"index": 29, "name": "left_heel"},
+    {"index": 30, "name": "right_heel"},
+    {"index": 31, "name": "left_foot_index"},
+    {"index": 32, "name": "right_foot_index"}
+  ]
+}
+    </script>
+
+    <script>
+        /** @type {object} Parsed strict schema from #smart-fitao-pose-spec */
+        const POSE_SPEC = JSON.parse(
+            document.getElementById('smart-fitao-pose-spec').textContent.trim()
+        );
+        const POSE_KEYPOINT_NAMES = POSE_SPEC.keypoints.map((k) => k.name);
+        const MIN_LANDMARK_VISIBILITY_ALL = Number(POSE_SPEC.min_landmark_visibility) || 0.65;
+
+        // Elements
+        const desktopView = document.getElementById('desktop-view');
+        const mobileView = document.getElementById('mobile-view');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const preCameraScreen = document.getElementById('pre-camera-screen');
+        const cameraLoadingOverlay = document.getElementById('camera-loading-overlay');
+        const cameraLoadingText = document.getElementById('camera-loading-text');
+
+        const video = document.getElementById('videoElement');
+        const overlayCanvas = document.getElementById('overlay-canvas');
+        const ctx = overlayCanvas.getContext('2d');
+
+        // UI Elements
+        const topControls = document.getElementById('top-controls');
+        const instructions = document.getElementById('instructions');
+        const flipCameraBtn = document.getElementById('flip-camera-btn');
+        const debugInfo = document.getElementById('debug-info');
+
+        const loaderLayer = document.getElementById('loader-layer');
+        const resultBackdrop = document.getElementById('result-backdrop');
+        const resultPanel = document.getElementById('result-panel');
+        const resultTitle = document.getElementById('result-title');
+        const resultSubtitle = document.getElementById('result-subtitle');
+        const snapshotPreview = document.getElementById('snapshot-preview');
+        const move3dResultBtn = document.getElementById('move-3d-result');
+        const btn2dTryon = document.getElementById('btn-2d-tryon');
+        let _lastCapturePayload = null;
+        const preCaptureOverlay = document.getElementById('pre-capture-countdown');
+        const preCaptureLabel = document.getElementById('pre-capture-label');
+        const preCaptureBigNum = document.getElementById('pre-capture-big-num');
+        const closeResultBtn = document.getElementById('close-result');
+        const shutterWrap = document.getElementById('shutter-wrap');
+        const btnCapturePhoto = document.getElementById('btn-capture-photo');
+        const shutterScore = document.getElementById('shutter-score');
+        const anthroBox = document.getElementById('anthro-box');
+        const accuracyPanel = document.getElementById('accuracy-panel');
+        const btnToggleLandmarks = document.getElementById('btn-toggle-landmarks');
+        const lmChartCount = document.getElementById('lm-chart-count');
+        const lmChartBarFill = document.getElementById('lm-chart-bar-fill');
+        const inputHeightCm = document.getElementById('input-height-cm');
+        const inputWeightKg = document.getElementById('input-weight-kg');
+        const inputAge = document.getElementById('input-age');
+
+        /** Latest pose for capture + shutter refresh (height/weight input). */
+        const _track = { lm: null, posture: false, apose: false };
+
+        // State Variables
+        let currentFacingMode = 'user'; // Front camera default for selfie
+        let isAppPaused = false; // Pauses AI when showing result
+        let captureCountdownTimer = null;
+        let captureCountdownDoneTimer = null;
+        let captureCountdownValue = 0;
+        // 0: Searching for human, 1: Human found but bad posture, 2: Ready for manual capture
+        let poseState = 0;
+        let camera;
+        let pose;
+        let _mediaStream = null;
+        let _poseLoopRunning = false;
+        let _poseRafId = null;
+        /** Live human-presence score 0..1 (same formula as Flask). */
+        let lastHumanProbability = 0;
+        /** Need at least this many landmarks above [MIN_LANDMARK_VISIBILITY_ALL] to capture. */
+        const _sp = new URLSearchParams(window.location.search);
+        const _minLmParam = parseInt(_sp.get('min_landmarks') || '', 10);
+        const MIN_LANDMARKS_FOR_CAPTURE = Number.isFinite(_minLmParam)
+            ? Math.max(1, Math.min(33, _minLmParam))
+            : 30;
+        /** Hold pose this long while fully “ready” before auto-capture fires. */
+        const AUTO_CAPTURE_HOLD_MS = 1800;
+        /** Brief “not ready” blips shorter than this do not reset the auto-capture timer. */
+        const AUTO_CAPTURE_STABILITY_GRACE_MS = 450;
+        /** Full seconds shown before the actual snap (3 → 2 → 1). */
+        const _timerSecParam = parseInt(_sp.get('timer_sec') || '', 10);
+        const PRE_SHUTTER_COUNTDOWN_SEC = Number.isFinite(_timerSecParam)
+            ? Math.max(1, Math.min(9, _timerSecParam))
+            : 3;
+        /** “Done!” on screen before the real shutter fires. */
+        const PRE_CAPTURE_DONE_HOLD_MS = 500;
+        let _autoCaptureStableSince = null;
+        let _autoCaptureUnreadySince = null;
+        let _captureBusy = false;
+        let _cameraFlowBusy = false;
+
+        // --- DEVICE DETECTION --- //
+        // Laptops report as "desktop" with a wide window, so they used to get the QR-only view.
+        // Inside an iframe (e.g. Flutter Web embed), always use the webcam flow so the laptop camera works.
+        let embeddedInFrame = false;
+        try {
+            embeddedInFrame = window.self !== window.top;
+        } catch (e) {
+            embeddedInFrame = true;
+        }
+        const flutterEmbed = _sp.has('flutter_embed');
+        // Always use webcam flow now (no QR/desktop gate screen).
+        desktopView.style.display = 'none';
+        mobileView.style.display = 'block';
+        function isAppAutoCameraMode() {
+            return flutterEmbed || embeddedInFrame || _sp.get('auto_start') === '1';
+        }
+
+        function hideIntroScreen() {
+            if (preCameraScreen) {
+                preCameraScreen.classList.add('is-hidden');
+                preCameraScreen.style.display = 'none';
+            }
+        }
+
+        if (isAppAutoCameraMode()) hideIntroScreen();
+
+        // Keep this fallback block harmless if old UI appears from cache.
+        const forceCameraBtn = document.getElementById('force-camera-btn');
+        if (forceCameraBtn) forceCameraBtn.addEventListener('click', () => {
+            desktopView.style.display = 'none';
+            mobileView.style.display = 'block';
+        });
+
+        // --- CAMERA INITIATION (MOBILE) --- //
+        const cameraErrorBox = document.getElementById('camera-error-box');
+        const cameraErrorTitle = document.getElementById('camera-error-title');
+        const cameraErrorDetail = document.getElementById('camera-error-detail');
+        const retryCameraBtn = document.getElementById('retry-camera-btn');
+
+        function clearCameraErrorUi() {
+            if (cameraErrorBox) cameraErrorBox.classList.remove('visible');
+            if (cameraErrorDetail) cameraErrorDetail.textContent = '';
+        }
+
+        function cameraErrorMessage(err) {
+            const name = (err && err.name) ? String(err.name) : '';
+            const msg = (err && err.message) ? String(err.message) : String(err || 'Unknown error');
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+                return {
+                    title: 'Camera permission denied',
+                    detail: 'Choose Allow when the app or browser asks. On Android: Settings → Apps → this app → Permissions → Camera → Allow.'
+                };
+            }
+            if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+                return {
+                    title: 'No camera found',
+                    detail: 'This device has no camera, or another app is using it. Close other camera apps and try again.'
+                };
+            }
+            if (name === 'NotReadableError' || name === 'TrackStartError') {
+                return {
+                    title: 'Camera is busy',
+                    detail: 'Another app may be using the camera. Close it and tap Try again.'
+                };
+            }
+            if (name === 'NotSupportedError') {
+                return {
+                    title: 'Camera not supported here',
+                    detail: 'Use the pose server on HTTP (SMARTFITAO_HTTP=1, port 5000). Emulator: CV_CAMERA_BASE=http://10.0.2.2:5000'
+                };
+            }
+            if (name === 'TimeoutError') {
+                return {
+                    title: 'Camera did not start',
+                    detail: msg
+                };
+            }
+            if (name === 'OverconstrainedError') {
+                return {
+                    title: 'Camera mode not supported',
+                    detail: 'Try again, or use the flip-camera button after the feed starts.'
+                };
+            }
+            return {
+                title: 'Camera failed to start',
+                detail: name ? (name + ': ' + msg) : msg
+            };
+        }
+
+        function showCameraLoading(msg) {
+            if (cameraLoadingText && msg) cameraLoadingText.textContent = msg;
+            if (cameraLoadingOverlay) cameraLoadingOverlay.classList.add('is-visible');
+        }
+
+        function hideCameraLoading() {
+            if (cameraLoadingOverlay) cameraLoadingOverlay.classList.remove('is-visible');
+        }
+
+        function showCameraError(err) {
+            hideCameraLoading();
+            const info = cameraErrorMessage(err);
+            if (cameraErrorTitle) cameraErrorTitle.textContent = info.title;
+            if (cameraErrorDetail) cameraErrorDetail.textContent = info.detail;
+            if (cameraErrorBox) cameraErrorBox.classList.add('visible');
+            if (preCameraScreen && !isAppAutoCameraMode()) {
+                preCameraScreen.classList.remove('is-hidden');
+                preCameraScreen.style.display = 'flex';
+            }
+            if (instructions) {
+                instructions.style.display = 'block';
+                instructions.textContent = info.title + ' — ' + info.detail;
+                instructions.className = 'ui-content instructions-panel';
+                instructions.style.backgroundColor = 'rgba(239, 68, 68, 0.85)';
+            }
+            postToFlutterHost({
+                type: 'smartfitao_cv',
+                phase: 'error',
+                human_detected: false,
+                human_probability: 0,
+                landmarks_count: 0,
+                message: info.title + ' — ' + info.detail
+            });
+        }
+
+        function setStartBtnLoading(loading) {
+            if (!startCameraBtn) return;
+            startCameraBtn.disabled = loading;
+            startCameraBtn.textContent = loading ? 'Starting camera…' : 'Allow camera & start';
+        }
+
+        function awaitFlutterCameraPermission() {
+            return new Promise((resolve) => {
+                let done = false;
+                const finish = () => {
+                    if (done) return;
+                    done = true;
+                    resolve();
+                };
+                window.__smartFitaoCameraGranted = finish;
+                try {
+                    if (typeof SmartFitaoApp !== 'undefined' && SmartFitaoApp.postMessage) {
+                        SmartFitaoApp.postMessage('request_camera');
+                        setTimeout(finish, 10000);
+                    } else {
+                        finish();
+                    }
+                } catch (_) {
+                    finish();
+                }
+            });
+        }
+
+        function assertMediaPipeReady() {
+            if (typeof Pose === 'undefined') {
+                throw Object.assign(
+                    new Error('Pose AI did not load. Connect to the internet and tap Try again.'),
+                    { name: 'NotSupportedError' }
+                );
+            }
+        }
+
+        function stopPoseLoop() {
+            _poseLoopRunning = false;
+            if (_poseRafId != null) {
+                cancelAnimationFrame(_poseRafId);
+                _poseRafId = null;
+            }
+        }
+
+        function startPoseLoop() {
+            stopPoseLoop();
+            _poseLoopRunning = true;
+            const loop = async () => {
+                if (!_poseLoopRunning) return;
+                if (!isAppPaused && pose && video.readyState >= 2 && video.videoWidth > 0) {
+                    try {
+                        await pose.send({ image: video });
+                    } catch (e) {
+                        console.warn('pose frame:', e);
+                    }
+                }
+                _poseRafId = requestAnimationFrame(loop);
+            };
+            _poseRafId = requestAnimationFrame(loop);
+        }
+
+        async function stopMediaStream() {
+            stopPoseLoop();
+            if (camera) {
+                try {
+                    await camera.stop();
+                } catch (_) { /* ignore */ }
+                camera = null;
+            }
+            if (_mediaStream) {
+                _mediaStream.getTracks().forEach((t) => t.stop());
+                _mediaStream = null;
+            }
+            if (video) {
+                video.srcObject = null;
+            }
+        }
+
+        async function startCameraDirect() {
+            await stopMediaStream();
+            const attempts = [
+                {
+                    video: {
+                        facingMode: { ideal: currentFacingMode },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                },
+                { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+                { video: true, audio: false }
+            ];
+            let lastErr = null;
+            for (const constraints of attempts) {
+                try {
+                    _mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    lastErr = null;
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                    console.warn('getUserMedia attempt failed:', e);
+                }
+            }
+            if (!_mediaStream) throw lastErr || new Error('Could not open camera');
+
+            video.srcObject = _mediaStream;
+            video.muted = true;
+            video.playsInline = true;
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('autoplay', 'true');
+            try {
+                await video.play();
+            } catch (playErr) {
+                console.warn('video.play:', playErr);
+            }
+            await waitForVideoReady();
+            const scaleX = currentFacingMode === 'user' ? -1 : 1;
+            if (video) video.style.transform = `scaleX(${scaleX})`;
+            if (overlayCanvas) overlayCanvas.style.transform = `scaleX(${scaleX})`;
+        }
+
+        function showCameraUi() {
+            hideCameraLoading();
+            if (preCameraScreen) {
+                preCameraScreen.classList.add('is-hidden');
+                preCameraScreen.style.display = 'none';
+            }
+            if (video) video.style.visibility = 'visible';
+            if (topControls) topControls.style.display = 'block';
+            if (instructions && !isAppAutoCameraMode()) {
+                instructions.style.display = 'block';
+                instructions.style.backgroundColor = '';
+                instructions.textContent = 'Stand full body in frame — green dots track your body';
+                instructions.className = 'ui-content instructions-panel';
+            }
+            if (debugInfo && !isAppAutoCameraMode()) {
+                debugInfo.textContent = 'Camera live';
+                debugInfo.style.display = 'block';
+            }
+            if (btnToggleLandmarks) btnToggleLandmarks.style.display = 'block';
+            if (shutterWrap) shutterWrap.style.display = 'flex';
+        }
+
+        function waitForVideoReady() {
+            return new Promise((resolve, reject) => {
+                const deadline = Date.now() + 15000;
+                const finishOk = () => {
+                    if (video.videoWidth > 0 && video.readyState >= 2) resolve();
+                    else if (Date.now() > deadline) {
+                        reject(Object.assign(
+                            new Error('Camera opened but no video frames arrived. Close other apps using the webcam and try again.'),
+                            { name: 'TimeoutError' }
+                        ));
+                    } else {
+                        requestAnimationFrame(finishOk);
+                    }
+                };
+                if (video.readyState >= 2 && video.videoWidth > 0) {
+                    resolve();
+                    return;
+                }
+                video.onloadedmetadata = () => finishOk();
+                video.onloadeddata = () => finishOk();
+                finishOk();
+            });
+        }
+
+        async function ensurePoseReady() {
+            if (typeof Pose !== 'undefined') {
+                initMediaPipe();
+                return true;
+            }
+            for (let i = 0; i < 60; i++) {
+                await new Promise((r) => setTimeout(r, 200));
+                if (typeof Pose !== 'undefined') {
+                    initMediaPipe();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        async function startCameraFlow() {
+            if (_cameraFlowBusy) return;
+            _cameraFlowBusy = true;
+            clearCameraErrorUi();
+            setStartBtnLoading(true);
+            if (preCameraScreen) {
+                preCameraScreen.classList.add('is-hidden');
+                preCameraScreen.style.display = 'none';
+            }
+            showCameraLoading('Loading pose AI…');
+            try {
+                const posePreOk = await ensurePoseReady();
+                if (!posePreOk) {
+                    throw Object.assign(
+                        new Error('Pose AI did not load. Check internet, then refresh this page (MediaPipe scripts from CDN).'),
+                        { name: 'NotSupportedError' }
+                    );
+                }
+                showCameraLoading('Opening camera…');
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw Object.assign(
+                        new Error('Camera API unavailable. Open http://127.0.0.1:5000 in Edge or allow camera for this site.'),
+                        { name: 'NotSupportedError' }
+                    );
+                }
+                // Mobile WebView only — skip on Edge/desktop iframe.
+                const isMobileUa = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+                if (isMobileUa) await awaitFlutterCameraPermission();
+
+                // Triggers Edge / Chrome permission popup on this click.
+                await startCameraDirect();
+                showCameraUi();
+
+                hideCameraLoading();
+                startPoseLoop();
+                if (debugInfo) {
+                    debugInfo.textContent = 'Stand in frame — green/blue dots = 33 landmarks';
+                }
+                initLandmarkGrid();
+                refreshCaptureShutterFromInputs();
+                postToFlutterHost({
+                    type: 'smartfitao_cv',
+                    phase: 'camera_ready',
+                    human_detected: false,
+                    human_probability: 0,
+                    landmarks_count: 0
+                });
+            } catch (err) {
+                console.error('startCameraFlow:', err);
+                _cameraFlowBusy = false;
+                showCameraError(err);
+            } finally {
+                setStartBtnLoading(false);
+                hideCameraLoading();
+            }
+        }
+
+        // Expose for inline onclick fallback in case some embed blocks normal listeners.
+        window.__smartFitaoStartCamera = startCameraFlow;
+        window.addEventListener('message', function (ev) {
+            var d = ev.data;
+            if (d === 'smartfitao_start_camera' || (d && d.type === 'smartfitao_start_camera')) {
+                startCameraFlow();
+            }
+        });
+        if (startCameraBtn) {
+            startCameraBtn.disabled = false;
+            startCameraBtn.style.pointerEvents = 'auto';
+            startCameraBtn.addEventListener('click', startCameraFlow);
+        }
+        if (retryCameraBtn) {
+            retryCameraBtn.addEventListener('click', startCameraFlow);
+        }
+
+        /** App / iframe: camera opens right away (after Continue to Camera in Flutter). */
+        if (isAppAutoCameraMode()) {
+            hideIntroScreen();
+            requestAnimationFrame(function () {
+                if (!_cameraFlowBusy) startCameraFlow();
+            });
+        }
+
+        function refreshCaptureShutterFromInputs() {
+            const hasHuman = Boolean(_track.lm);
+            const allLm = hasHuman && landmarksCaptureReady(_track.lm);
+            updateCaptureShutter(hasHuman, _track.posture, _track.apose, allLm);
+        }
+
+        inputHeightCm.addEventListener('input', refreshCaptureShutterFromInputs);
+        inputWeightKg.addEventListener('input', refreshCaptureShutterFromInputs);
+        inputAge.addEventListener('input', refreshCaptureShutterFromInputs);
+
+        function landmarkShortLabel(name) {
+            let s = name.replace(/^left_/, 'L ').replace(/^right_/, 'R ').replace(/_/g, ' ');
+            if (s.length > 12) return s.slice(0, 11) + '…';
+            return s;
+        }
+
+        function initLandmarkGrid() {
+            const host = document.getElementById('landmark-grid');
+            if (!host || host.children.length) return;
+            for (let i = 0; i < 33; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'lm-cell';
+                cell.title = POSE_KEYPOINT_NAMES[i];
+                const dot = document.createElement('span');
+                dot.className = 'lm-dot bad';
+                dot.id = 'lm-dot-' + i;
+                const lbl = document.createElement('span');
+                lbl.className = 'lm-name';
+                lbl.textContent = landmarkShortLabel(POSE_KEYPOINT_NAMES[i]);
+                cell.appendChild(dot);
+                cell.appendChild(lbl);
+                host.appendChild(cell);
+            }
+        }
+
+        function setAccStatus(id, ok) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('ok', 'bad');
+            el.classList.add(ok ? 'ok' : 'bad');
+        }
+
+        function updateLandmarkDots(landmarks) {
+            for (let i = 0; i < 33; i++) {
+                const dot = document.getElementById('lm-dot-' + i);
+                if (!dot) continue;
+                const ok = landmarks && (landmarks[i].visibility || 0) >= MIN_LANDMARK_VISIBILITY_ALL;
+                dot.classList.remove('ok', 'bad');
+                dot.classList.add(ok ? 'ok' : 'bad');
+            }
+        }
+
+        function updateAccuracyPanelUI(hasHuman, postureGood, aPoseGood, allLandmarksOk) {
+            const strong = hasHuman && _track.lm ? countStrongLandmarks(_track.lm) : 0;
+            const pct = Math.round((strong / 33) * 100);
+            if (lmChartCount) lmChartCount.textContent = strong + ' / 33';
+            if (lmChartBarFill) lmChartBarFill.style.width = pct + '%';
+            setAccStatus('acc-status-body', hasHuman);
+            setAccStatus('acc-status-posture', hasHuman && postureGood);
+            setAccStatus('acc-status-apose', hasHuman && aPoseGood);
+            setAccStatus('acc-status-landmarks', hasHuman && allLandmarksOk);
+            updateLandmarkDots(hasHuman ? _track.lm : null);
+        }
+
+        function closeLandmarksPanel() {
+            if (!accuracyPanel || !btnToggleLandmarks) return;
+            accuracyPanel.classList.remove('is-open');
+            accuracyPanel.hidden = true;
+            btnToggleLandmarks.classList.remove('is-open');
+            btnToggleLandmarks.setAttribute('aria-expanded', 'false');
+            btnToggleLandmarks.textContent = '33 landmarks';
+        }
+
+        if (btnToggleLandmarks && accuracyPanel) {
+            btnToggleLandmarks.addEventListener('click', () => {
+                const open = accuracyPanel.classList.toggle('is-open');
+                accuracyPanel.hidden = !open;
+                btnToggleLandmarks.classList.toggle('is-open', open);
+                btnToggleLandmarks.setAttribute('aria-expanded', open ? 'true' : 'false');
+                btnToggleLandmarks.textContent = open ? 'Hide chart' : '33 landmarks';
+            });
+        }
+
+        (function applyAppQueryPrefill() {
+            try {
+                const sp = new URLSearchParams(window.location.search);
+                const h = sp.get('height_cm');
+                const w = sp.get('weight_kg');
+                const ag = sp.get('age');
+                if (h != null && h !== '' && inputHeightCm) inputHeightCm.value = h;
+                if (w != null && w !== '' && inputWeightKg) inputWeightKg.value = w;
+                if (ag != null && ag !== '' && inputAge) inputAge.value = ag;
+            } catch (e) { /* ignore */ }
+        })();
+
+        function getCaptureReadyState() {
+            const hasHuman = Boolean(_track.lm);
+            const allLandmarksOk = hasHuman && landmarksCaptureReady(_track.lm);
+            const postureGood = _track.posture;
+            const aPoseGood = _track.apose;
+            const metaOk = getAnthroOk();
+            /** Shutter + tap capture: only body + 30 strong landmarks (no posture / A-pose / forms). */
+            const ready = hasHuman && allLandmarksOk;
+            return { ready, hasHuman, allLandmarksOk, postureGood, aPoseGood, metaOk };
+        }
+
+        function showCaptureBlockedHint(st) {
+            if (!instructions || isAppPaused) return;
+            instructions.className = 'ui-content instructions-panel';
+            if (!st.hasHuman) {
+                instructions.textContent = 'Step in frame so your body is tracked';
+            } else if (!st.allLandmarksOk) {
+                instructions.textContent = 'Move back — keep full body in the box';
+            } else {
+                instructions.textContent = 'Hold steady — updating…';
+            }
+        }
+
+        btnCapturePhoto.addEventListener('click', () => {
+            if (isAppPaused || _captureBusy) return;
+            const st = getCaptureReadyState();
+            if (!st.ready) {
+                showCaptureBlockedHint(st);
+                return;
+            }
+            beginCaptureFlow();
+        });
+
+
+        // --- MEDIAPIPE LOGIC --- //
+        function initMediaPipe() {
+            if (pose) return; // Prevent double init
+
+            pose = new Pose({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
+                }
+            });
+
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                smoothSegmentation: false,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5,
+                selfieMode: true
+            });
+
+            pose.onResults(onResults);
+        }
+
+        async function startCamera() {
+            await stopMediaStream();
+            const isMobileUa = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+            // Desktop Edge/Chrome in iframe: direct getUserMedia is most reliable.
+            if (!isMobileUa || typeof Camera === 'undefined') {
+                await startCameraDirect();
+                return;
+            }
+
+            try {
+                camera = new Camera(video, {
+                    onFrame: async () => {
+                        if (!isAppPaused && pose) {
+                            await pose.send({ image: video });
+                        }
+                    },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: currentFacingMode
+                });
+                await camera.start();
+                await waitForVideoReady();
+            } catch (e) {
+                console.warn('MediaPipe Camera failed, using direct getUserMedia:', e);
+                await stopMediaStream();
+                await startCameraDirect();
+            }
+        }
+
+        flipCameraBtn.addEventListener('click', async () => {
+            currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+
+            const scaleX = currentFacingMode === 'user' ? -1 : 1;
+            video.style.transform = `scaleX(${scaleX})`;
+            overlayCanvas.style.transform = `scaleX(${scaleX})`;
+
+            try {
+                await startCamera();
+            } catch (err) {
+                console.error('flip camera:', err);
+                showCameraError(err);
+            }
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function resizeCanvas() {
+            overlayCanvas.width = window.innerWidth;
+            overlayCanvas.height = window.innerHeight;
+        }
+        // Call once initially
+        resizeCanvas();
+
+        function onResults(results) {
+            if (isAppPaused) return;
+
+            let isPostureGood = false;
+            let isAPoseGood = false;
+
+            if (results.poseLandmarks) {
+                lastHumanProbability = computeHumanProbability(results.poseLandmarks);
+                isPostureGood = validatePosture(results.poseLandmarks);
+                isAPoseGood = validateAPose(results.poseLandmarks);
+                _track.lm = results.poseLandmarks;
+                _track.posture = isPostureGood;
+                _track.apose = isAPoseGood;
+            } else {
+                lastHumanProbability = 0;
+                _track.lm = null;
+                _track.posture = _track.apose = false;
+            }
+
+            const hasHuman = Boolean(results.poseLandmarks);
+            const allFilled = hasHuman && landmarksCaptureReady(results.poseLandmarks);
+
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+
+            if (videoWidth > 0 && videoHeight > 0) {
+                ctx.save();
+                ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+                const canvasAspect = overlayCanvas.width / overlayCanvas.height;
+                const videoAspect = videoWidth / videoHeight;
+                let drawWidth, drawHeight, offsetX, offsetY;
+                if (canvasAspect > videoAspect) {
+                    drawWidth = overlayCanvas.width;
+                    drawHeight = overlayCanvas.width / videoAspect;
+                    offsetX = 0;
+                    offsetY = (overlayCanvas.height - drawHeight) / 2;
+                } else {
+                    drawHeight = overlayCanvas.height;
+                    drawWidth = overlayCanvas.height * videoAspect;
+                    offsetX = (overlayCanvas.width - drawWidth) / 2;
+                    offsetY = 0;
+                }
+
+                drawStandZoneVignette(ctx, drawWidth, drawHeight, offsetX, offsetY);
+
+                if (results.poseLandmarks) {
+                    const mapped = mapLandmarks(results.poseLandmarks, drawWidth, drawHeight, offsetX, offsetY);
+                    if (debugInfo && !isAppAutoCameraMode()) {
+                        const strongCount = countStrongLandmarks(results.poseLandmarks);
+                        debugInfo.textContent = "Human " + (lastHumanProbability * 100).toFixed(0) + "% | strong "
+                            + strongCount + "/33 | posture " + (isPostureGood ? "OK" : "adjust");
+                    }
+                    drawPoseTracker(ctx, mapped, results.poseLandmarks);
+                    postLiveHumanToParent(results.poseLandmarks);
+                } else if (debugInfo && !isAppAutoCameraMode()) {
+                    debugInfo.textContent = "Searching for human… 0%";
+                }
+                ctx.restore();
+            } else if (results.poseLandmarks && debugInfo && !isAppAutoCameraMode()) {
+                const strongCount = countStrongLandmarks(results.poseLandmarks);
+                debugInfo.textContent = "Human " + (lastHumanProbability * 100).toFixed(0) + "% | strong "
+                    + strongCount + "/33 | posture " + (isPostureGood ? "OK" : "adjust") + " · video…";
+            } else if (debugInfo && !isAppAutoCameraMode()) {
+                debugInfo.textContent = "Searching for human… 0%";
+            }
+
+            updateUIState(isPostureGood, isAPoseGood, hasHuman, allFilled);
+            updateCaptureShutter(hasHuman, isPostureGood, isAPoseGood, allFilled);
+        }
+
+        function mapLandmarks(landmarks, dw, dh, ox, oy) {
+            return landmarks.map(l => ({
+                x: l.x * dw + ox,
+                y: l.y * dh + oy,
+                z: l.z,
+                visibility: l.visibility
+            }));
+        }
+
+        function _connEndpoints(c) {
+            if (Array.isArray(c)) return [c[0], c[1]];
+            if (c && c.start !== undefined) return [c.start, c.end];
+            return [0, 0];
+        }
+
+        /** Skeleton lines + 33 landmark dots (green / amber / red by visibility). */
+        function drawPoseTracker(ctx, mapped, rawList) {
+            if (!rawList || !mapped || mapped.length < 33) return;
+            const raw = (i) => rawList[i];
+            const P = (i) => mapped[i];
+            const visOf = (i) => (raw(i).visibility != null ? raw(i).visibility : 0);
+            const colorForVis = (v) => {
+                if (v >= MIN_LANDMARK_VISIBILITY_ALL) return '#38bdf8';
+                if (v >= 0.4) return '#fbbf24';
+                return '#f87171';
+            };
+
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if (typeof POSE_CONNECTIONS !== 'undefined') {
+                for (let i = 0; i < POSE_CONNECTIONS.length; i++) {
+                    const [a, b] = _connEndpoints(POSE_CONNECTIONS[i]);
+                    const va = visOf(a), vb = visOf(b);
+                    if (va < 0.25 || vb < 0.25) continue;
+                    const pa = P(a), pb = P(b);
+                    const col = colorForVis(Math.min(va, vb));
+                    ctx.beginPath();
+                    ctx.moveTo(pa.x, pa.y);
+                    ctx.lineTo(pb.x, pb.y);
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+                    ctx.lineWidth = 5;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(pa.x, pa.y);
+                    ctx.lineTo(pb.x, pb.y);
+                    ctx.strokeStyle = col;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+            }
+
+            for (let i = 0; i < 33; i++) {
+                const v = visOf(i);
+                if (v < 0.15) continue;
+                const p = P(i);
+                const r = v >= MIN_LANDMARK_VISIBILITY_ALL ? 7 : (v >= 0.4 ? 6 : 5);
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r + 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+                ctx.fillStyle = colorForVis(v);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function countWeakLandmarks(landmarks) {
+            if (!landmarks || landmarks.length < 33) return 33;
+            let n = 0;
+            for (let i = 0; i < 33; i++) {
+                if ((landmarks[i].visibility || 0) < MIN_LANDMARK_VISIBILITY_ALL) n++;
+            }
+            return n;
+        }
+
+        function countStrongLandmarks(landmarks) {
+            if (!landmarks || landmarks.length < 33) return 0;
+            let n = 0;
+            for (let i = 0; i < 33; i++) {
+                if ((landmarks[i].visibility || 0) >= MIN_LANDMARK_VISIBILITY_ALL) n++;
+            }
+            return n;
+        }
+
+        function landmarksCaptureReady(landmarks) {
+            return countStrongLandmarks(landmarks) >= MIN_LANDMARKS_FOR_CAPTURE;
+        }
+
+        function heightFieldOk() {
+            const h = parseFloat(inputHeightCm.value);
+            const hr = POSE_SPEC.height_cm_range || [120, 230];
+            return Number.isFinite(h) && h >= hr[0] && h <= hr[1];
+        }
+
+        function weightFieldOk() {
+            const w = parseFloat(inputWeightKg.value);
+            const wr = POSE_SPEC.weight_kg_range || [30, 250];
+            return Number.isFinite(w) && w >= wr[0] && w <= wr[1];
+        }
+
+        function ageFieldOk() {
+            const a = parseInt(inputAge.value, 10);
+            const ar = POSE_SPEC.age_range || [18, 100];
+            return Number.isFinite(a) && a >= ar[0] && a <= ar[1];
+        }
+
+        function getAnthroOk() {
+            if (isAppAutoCameraMode()) {
+                try {
+                    const sp = new URLSearchParams(window.location.search);
+                    const fromUrl = sp.has('height_cm') && sp.has('weight_kg') && sp.has('age');
+                    if (fromUrl) return true;
+                } catch (e) { /* ignore */ }
+            }
+            return heightFieldOk() && weightFieldOk() && ageFieldOk();
+        }
+
+        function buildExportPoseJson() {
+            const lm = _track.lm;
+            if (!lm || lm.length < 33) return null;
+            const h = parseFloat(inputHeightCm.value);
+            const w = parseFloat(inputWeightKg.value);
+            const age = parseInt(inputAge.value, 10);
+            return {
+                dataset_name: POSE_SPEC.dataset_name,
+                schema_version: POSE_SPEC.schema_version,
+                height_cm: h,
+                weight_kg: w,
+                age_years: Number.isFinite(age) ? age : null,
+                human_probability: +lastHumanProbability.toFixed(4),
+                keypoints: lm.map((p, i) => ({
+                    name: POSE_KEYPOINT_NAMES[i],
+                    x: +p.x.toFixed(6),
+                    y: +p.y.toFixed(6),
+                    z: +(p.z != null ? p.z : 0).toFixed(6),
+                    visibility: +(p.visibility != null ? p.visibility : 0).toFixed(4)
+                }))
+            };
+        }
+
+        /** Normalized landmark coords (0–1) → canvas (same mapping as pose). */
+        function normToCanvas(nx, ny, dw, dh, ox, oy) {
+            return { x: nx * dw + ox, y: ny * dh + oy };
+        }
+
+        /** Same geometry as stand zone (full-body frame). */
+        function getStandZoneGeometry(dw, dh, ox, oy) {
+            const m = 0.12, yTop = 0.05, yBot = 0.97;
+            const x0 = ox + m * dw, y0 = oy + yTop * dh;
+            const rw = (1 - 2 * m) * dw, rh = (yBot - yTop) * dh;
+            const rad = Math.min(28, rw * 0.06);
+            return { x0, y0, rw, rh, rad };
+        }
+
+        function pathStandZoneRoundedRect(ctx, g) {
+            const { x0, y0, rw, rh, rad } = g;
+            ctx.beginPath();
+            ctx.moveTo(x0 + rad, y0);
+            ctx.lineTo(x0 + rw - rad, y0);
+            ctx.quadraticCurveTo(x0 + rw, y0, x0 + rw, y0 + rad);
+            ctx.lineTo(x0 + rw, y0 + rh - rad);
+            ctx.quadraticCurveTo(x0 + rw, y0 + rh, x0 + rw - rad, y0 + rh);
+            ctx.lineTo(x0 + rad, y0 + rh);
+            ctx.quadraticCurveTo(x0, y0 + rh, x0, y0 + rh - rad);
+            ctx.lineTo(x0, y0 + rad);
+            ctx.quadraticCurveTo(x0, y0, x0 + rad, y0);
+            ctx.closePath();
+        }
+
+        /** Darken everything except the stand zone (video shows clearly only where to stand). */
+        function drawStandZoneVignette(ctx, dw, dh, ox, oy) {
+            const g = getStandZoneGeometry(dw, dh, ox, oy);
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.78)';
+            ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            ctx.globalCompositeOperation = 'destination-out';
+            pathStandZoneRoundedRect(ctx, g);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // Heuristics for "Good Posture" in frame
+        function validatePosture(landmarks) {
+            // Essential landmarks array indices:
+            // 0: nose, 11/12: shoulders, 23/24: hips, 27/28: ankles
+            const requiredIds = [0, 11, 12, 23, 24, 27, 28];
+            const minVisibility = 0.6;
+
+            for (let id of requiredIds) {
+                const lm = landmarks[id];
+                if (!lm || lm.visibility < minVisibility) {
+                    return false; // Missing parts (e.g., feet cut off)
+                }
+
+                // Bounds check
+                const margin = 0.05;
+                if (lm.x < margin || lm.x > (1 - margin) || lm.y < margin || lm.y > (1 - margin)) {
+                    return false;
+                }
+            }
+
+            // Standing straight check (Hips below shoulders, ankles below hips)
+            const shouldersAvgY = (landmarks[11].y + landmarks[12].y) / 2;
+            const hipsAvgY = (landmarks[23].y + landmarks[24].y) / 2;
+            const anklesAvgY = (landmarks[27].y + landmarks[28].y) / 2;
+
+            if (hipsAvgY < shouldersAvgY || anklesAvgY < hipsAvgY) {
+                return false; // E.g., upside down or severely bent
+            }
+
+            return true;
+        }
+
+        /** A-pose heuristic: arms slightly away from torso, not T-pose and not hands-up. */
+        function validateAPose(landmarks) {
+            const ids = [11, 12, 13, 14, 15, 16, 23, 24];
+            for (const id of ids) {
+                const lm = landmarks[id];
+                if (!lm || (lm.visibility || 0) < 0.55) return false;
+            }
+
+            const ls = landmarks[11], rs = landmarks[12];
+            const le = landmarks[13], re = landmarks[14];
+            const lw = landmarks[15], rw = landmarks[16];
+            const lh = landmarks[23], rh = landmarks[24];
+
+            const shoulderWidth = Math.abs(rs.x - ls.x);
+            if (shoulderWidth < 0.08) return false;
+
+            const leftDx = le.x - ls.x, leftDy = le.y - ls.y;
+            const rightDx = re.x - rs.x, rightDy = re.y - rs.y;
+            if (leftDy < 0.02 || rightDy < 0.02) return false;
+
+            const leftOut = leftDx < -0.02;
+            const rightOut = rightDx > 0.02;
+            if (!leftOut || !rightOut) return false;
+
+            const leftAng = Math.atan2(Math.abs(leftDx), Math.max(1e-4, leftDy)) * 180 / Math.PI;
+            const rightAng = Math.atan2(Math.abs(rightDx), Math.max(1e-4, rightDy)) * 180 / Math.PI;
+            if (!(leftAng >= 18 && leftAng <= 58)) return false;
+            if (!(rightAng >= 18 && rightAng <= 58)) return false;
+
+            if (lw.y < le.y - 0.03 || rw.y < re.y - 0.03) return false;
+            const hipMidY = (lh.y + rh.y) / 2;
+            if (lw.y < hipMidY - 0.25 || rw.y < hipMidY - 0.25) return false;
+
+            return true;
+        }
+
+        const CORE_POSE_IDX = [0, 11, 12, 23, 24, 27, 28];
+
+        /** Same blend as Flask `app.py` `_score_human_from_landmarks`. */
+        function computeHumanProbability(landmarks) {
+            if (!landmarks || landmarks.length < 33) return 0;
+            let sumAll = 0;
+            for (let i = 0; i < 33; i++) sumAll += (landmarks[i].visibility || 0);
+            const avgAll = sumAll / 33;
+            let sumCore = 0;
+            for (const id of CORE_POSE_IDX) sumCore += (landmarks[id].visibility || 0);
+            const avgCore = sumCore / CORE_POSE_IDX.length;
+            let strong = 0;
+            for (const id of CORE_POSE_IDX) {
+                if ((landmarks[id].visibility || 0) >= 0.4) strong++;
+            }
+            return Math.min(1, 0.25 * avgAll + 0.45 * avgCore + 0.30 * (strong / CORE_POSE_IDX.length));
+        }
+
+        let _lastLivePost = 0;
+        /** Flutter Web (iframe parent) + Flutter mobile WebView (`SmartFitaoCv` channel). */
+        function postToFlutterHost(payloadObj) {
+            const jsonStr = JSON.stringify(payloadObj);
+            try {
+                parent.postMessage(jsonStr, '*');
+            } catch (e) { /* not in iframe */ }
+            try {
+                if (typeof SmartFitaoCv !== 'undefined' && SmartFitaoCv.postMessage) {
+                    SmartFitaoCv.postMessage(jsonStr);
+                }
+            } catch (e) { /* not in WebView */ }
+        }
+
+        function postLiveHumanToParent(landmarks) {
+            const now = Date.now();
+            if (now - _lastLivePost < 320) return;
+            _lastLivePost = now;
+            const p = computeHumanProbability(landmarks);
+            const strong = CORE_POSE_IDX.filter(id => (landmarks[id].visibility || 0) >= 0.4).length;
+            const det = p >= 0.42 && strong >= 4;
+            postToFlutterHost({
+                type: 'smartfitao_cv',
+                phase: 'live',
+                human_probability: +p.toFixed(4),
+                human_detected: det,
+                landmarks_count: 33
+            });
+        }
+
+        function buildCapturePayload(data) {
+            const hp = (data.human_probability != null && data.human_probability !== undefined)
+                ? Number(data.human_probability)
+                : (data.human_detected ? 1 : 0);
+            const poseRecord = buildExportPoseJson();
+            const origin = window.location.origin || '';
+            const imageAbs = data.image_url ? (origin + data.image_url) : '';
+            return {
+                type: 'smartfitao_cv',
+                phase: 'capture',
+                human_probability: +hp.toFixed(4),
+                human_detected: !!data.human_detected,
+                landmarks_count: data.landmarks_count != null ? data.landmarks_count : 0,
+                message: data.message || '',
+                saved_filename: data.saved_filename || '',
+                image_url: imageAbs,
+                pose_record: poseRecord
+            };
+        }
+
+        function postCaptureToParent(data, options) {
+            const payload = buildCapturePayload(data);
+            const returnTo = _sp.get('return_to');
+            const autoRedirect = options && options.autoRedirect === true;
+            if (returnTo && autoRedirect) {
+                try {
+                    sessionStorage.setItem('smartfitao_cv_payload', JSON.stringify(payload));
+                } catch (_) {}
+                const sep = returnTo.indexOf('?') >= 0 ? '&' : '?';
+                window.location.href = returnTo + sep + 'cv_return=1';
+                return;
+            }
+            postToFlutterHost(payload);
+        }
+
+        function navigateToFlutterTryOn() {
+            const tryonApp = (_sp.get('tryon_return') || 'http://localhost:65109').replace(/\/+$/, '');
+            const payload = _lastCapturePayload
+                ? Object.assign({}, _lastCapturePayload, { open_tryon: true })
+                : { open_tryon: true, image_url: null, landmarks_count: 0, phase: 'go_tryon' };
+            var handoffObj = {};
+            var handoffParam = _sp.get('handoff');
+            if (handoffParam) {
+                try {
+                    handoffObj = JSON.parse(decodeURIComponent(escape(atob(handoffParam.replace(/-/g, '+').replace(/_/g, '/')))));
+                } catch (e1) {
+                    try { handoffObj = JSON.parse(atob(handoffParam)); } catch (e2) { handoffObj = {}; }
+                }
+            }
+            handoffObj.capture = payload;
+            var handoffOut = btoa(unescape(encodeURIComponent(JSON.stringify(handoffObj))));
+            window.location.href = tryonApp + '/?handoff=' + encodeURIComponent(handoffOut);
+        }
+
+        function bindGoTryOnButtons() {
+            const goBtns = [
+                document.getElementById('btn-go-2d-tryon'),
+                document.getElementById('btn-go-2d-tryon-pre')
+            ];
+            goBtns.forEach(function (btn) {
+                if (!btn || btn._goTryonBound) return;
+                btn._goTryonBound = true;
+                btn.addEventListener('click', function () { navigateToFlutterTryOn(); });
+            });
+            const show = isAppAutoCameraMode() || _sp.has('tryon_return') || !!_sp.get('tryon_return');
+            if (document.getElementById('btn-go-2d-tryon-pre')) {
+                document.getElementById('btn-go-2d-tryon-pre').style.display = show ? 'inline-block' : 'none';
+            }
+        }
+        bindGoTryOnButtons();
+
+        function updateUIState(isPostureGood, isAPoseGood, hasHuman, allLandmarksOk) {
+            if (isAppAutoCameraMode()) {
+                if (!hasHuman) poseState = 0;
+                else if (!allLandmarksOk) poseState = 1;
+                else poseState = 2;
+                return;
+            }
+            if (!instructions) return;
+            if (!hasHuman) {
+                cancelCountdown();
+                instructions.textContent = "Stand in the amber box — A-pose, all joints visible (green dots)";
+                instructions.className = "ui-content instructions-panel";
+                poseState = 0;
+                return;
+            }
+
+            if (!allLandmarksOk) {
+                poseState = 1;
+                instructions.textContent = "Move back — keep full body in the box";
+                instructions.className = "ui-content instructions-panel";
+                return;
+            }
+
+            poseState = 2;
+            instructions.className = "ui-content instructions-panel good";
+            if (!isPostureGood || !isAPoseGood) {
+                instructions.textContent = "Tap Take photo — tip: A-pose improves accuracy";
+            } else {
+                instructions.textContent = "Tap Take photo (or hold still for auto)";
+            }
+        }
+
+        function updateCaptureShutter(hasHuman, postureGood, aPoseGood, allLandmarksOk) {
+            const metaOk = getAnthroOk();
+            const ready = hasHuman && allLandmarksOk;
+
+            btnCapturePhoto.setAttribute('aria-disabled', ready ? 'false' : 'true');
+            btnCapturePhoto.classList.remove('shutter-btn--ok', 'shutter-btn--bad', 'shutter-btn--progress');
+            if (ready) {
+                btnCapturePhoto.classList.add('shutter-btn--ok');
+            } else if (hasHuman) {
+                btnCapturePhoto.classList.add('shutter-btn--progress');
+            } else {
+                btnCapturePhoto.classList.add('shutter-btn--bad');
+            }
+
+            updateAccuracyPanelUI(hasHuman, postureGood, aPoseGood, allLandmarksOk);
+
+            if (isAppPaused) {
+                _autoCaptureStableSince = null;
+                _autoCaptureUnreadySince = null;
+            } else {
+                maybeAutoCapture(ready);
+            }
+
+            if (!isAppPaused) {
+                if (ready) {
+                    const now = Date.now();
+                    if (_autoCaptureStableSince != null) {
+                        const leftMs = AUTO_CAPTURE_HOLD_MS - (now - _autoCaptureStableSince);
+                        const leftS = Math.max(0, Math.ceil(leftMs / 1000));
+                        shutterScore.textContent = leftS > 0
+                            ? `All OK — auto capture in ${leftS}s (hold still)`
+                            : `Capturing…`;
+                    } else {
+                        shutterScore.textContent = `Ready — hold still`;
+                    }
+                } else if (!hasHuman) {
+                    shutterScore.textContent = 'Step in frame — stand in the box';
+                } else if (!allLandmarksOk) {
+                    shutterScore.textContent = 'Hold A-pose — full body in frame';
+                }
+            }
+        }
+
+        function startCountdown() {
+            /* pre-capture 3-2-1 uses beginCaptureFlow + captureCountdownTimer */
+        }
+
+        function cancelCountdown() {
+            if (captureCountdownTimer) {
+                clearInterval(captureCountdownTimer);
+                captureCountdownTimer = null;
+            }
+            if (captureCountdownDoneTimer) {
+                clearTimeout(captureCountdownDoneTimer);
+                captureCountdownDoneTimer = null;
+            }
+            if (preCaptureBigNum) {
+                preCaptureBigNum.classList.remove('pre-capture-big-num--done');
+            }
+            if (preCaptureOverlay) {
+                preCaptureOverlay.classList.remove('is-visible');
+            }
+            _captureBusy = false;
+        }
+
+        function beginCaptureFlow() {
+            if (_captureBusy || isAppPaused) return;
+            closeLandmarksPanel();
+            _autoCaptureStableSince = null;
+            _autoCaptureUnreadySince = null;
+            cancelCountdown();
+            _captureBusy = true;
+            isAppPaused = true;
+            btnCapturePhoto.setAttribute('aria-disabled', 'true');
+            if (preCaptureLabel) preCaptureLabel.textContent = 'Taking picture';
+            if (preCaptureBigNum) {
+                preCaptureBigNum.classList.remove('pre-capture-big-num--done');
+                preCaptureBigNum.textContent = String(PRE_SHUTTER_COUNTDOWN_SEC);
+            }
+            if (preCaptureOverlay) preCaptureOverlay.classList.add('is-visible');
+
+            let remaining = PRE_SHUTTER_COUNTDOWN_SEC;
+            captureCountdownTimer = setInterval(() => {
+                remaining -= 1;
+                if (remaining > 0) {
+                    if (preCaptureBigNum) preCaptureBigNum.textContent = String(remaining);
+                } else {
+                    clearInterval(captureCountdownTimer);
+                    captureCountdownTimer = null;
+                    if (preCaptureLabel) preCaptureLabel.textContent = '';
+                    if (preCaptureBigNum) {
+                        preCaptureBigNum.textContent = 'Done!';
+                        preCaptureBigNum.classList.add('pre-capture-big-num--done');
+                    }
+                    captureCountdownDoneTimer = setTimeout(() => {
+                        captureCountdownDoneTimer = null;
+                        if (preCaptureOverlay) preCaptureOverlay.classList.remove('is-visible');
+                        if (preCaptureBigNum) preCaptureBigNum.classList.remove('pre-capture-big-num--done');
+                        _captureBusy = false;
+                        executeCapture();
+                    }, PRE_CAPTURE_DONE_HOLD_MS);
+                }
+            }, 1000);
+        }
+
+        /** When all checks pass continuously for [AUTO_CAPTURE_HOLD_MS], capture automatically. */
+        function maybeAutoCapture(ready) {
+            if (isAppPaused) {
+                _autoCaptureStableSince = null;
+                _autoCaptureUnreadySince = null;
+                return;
+            }
+            const now = Date.now();
+            if (!ready) {
+                if (_autoCaptureUnreadySince == null) _autoCaptureUnreadySince = now;
+                if (_autoCaptureStableSince != null
+                    && (now - _autoCaptureUnreadySince >= AUTO_CAPTURE_STABILITY_GRACE_MS)) {
+                    _autoCaptureStableSince = null;
+                }
+                return;
+            }
+            _autoCaptureUnreadySince = null;
+            if (_autoCaptureStableSince == null) {
+                _autoCaptureStableSince = now;
+                return;
+            }
+            if (now - _autoCaptureStableSince >= AUTO_CAPTURE_HOLD_MS) {
+                _autoCaptureStableSince = null;
+                if (!_captureBusy) {
+                    beginCaptureFlow();
+                }
+            }
+        }
+
+        async function executeCapture() {
+            _autoCaptureStableSince = null;
+            isAppPaused = true;
+            ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            loaderLayer.style.display = 'flex';
+
+            // Ensure UI updates before heavy capture process
+            await new Promise(r => setTimeout(r, 50));
+
+            if (!video.videoWidth || !video.videoHeight) {
+                loaderLayer.style.display = 'none';
+                isAppPaused = false;
+                _captureBusy = false;
+                if (instructions) {
+                    instructions.className = 'ui-content instructions-panel';
+                    instructions.textContent = 'Camera not ready — wait a second and tap Take photo again';
+                }
+                refreshCaptureShutterFromInputs();
+                return;
+            }
+
+            // Create hidden canvas to capture full res frame
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            const ctxCapture = captureCanvas.getContext('2d');
+
+            // Flip canvas drawing if front camera to save it the way user sees it
+            if (currentFacingMode === 'user') {
+                ctxCapture.translate(captureCanvas.width, 0);
+                ctxCapture.scale(-1, 1);
+            }
+            ctxCapture.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+            // Show snapshot locally
+            const dataUrl = captureCanvas.toDataURL('image/jpeg');
+            snapshotPreview.src = dataUrl;
+            snapshotPreview.style.display = 'block';
+
+            // Prepare blob for upload
+            captureCanvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('image', blob, 'auto_capture.jpg');
+                const posePayload = buildExportPoseJson();
+                if (posePayload) {
+                    formData.append('pose_json', JSON.stringify(posePayload));
+                }
+
+                try {
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    loaderLayer.style.display = 'none';
+                    const lmCount = data.landmarks_count != null ? data.landmarks_count : 0;
+                    const verified = data.human_detected && lmCount >= MIN_LANDMARKS_FOR_CAPTURE;
+
+                    if (!verified) {
+                        isAppPaused = false;
+                        _captureBusy = false;
+                        refreshCaptureShutterFromInputs();
+                        const msg = `Human not verified for try-on (${lmCount}/33 landmarks). Stand full body in A-pose until 30+ dots are green, then capture again.`;
+                        showResult(false, msg, lmCount, true, data.human_probability, data.saved_filename, null);
+                        postToFlutterHost({
+                            type: 'smartfitao_cv',
+                            phase: 'capture',
+                            human_detected: false,
+                            human_probability: data.human_probability || 0,
+                            landmarks_count: lmCount,
+                            message: msg
+                        });
+                        return;
+                    }
+
+                    const imgUrl = data.image_url
+                        ? new URL(data.image_url, window.location.origin).href
+                        : null;
+                    _lastCapturePayload = buildCapturePayload(data);
+                    showResult(true, 'Body verified — your photo is ready for 2D try-on.', lmCount, false, data.human_probability, data.saved_filename, imgUrl);
+                    if (!_sp.get('return_to')) postCaptureToParent(data);
+
+                } catch (error) {
+                    console.error("API Error:", error);
+                    loaderLayer.style.display = 'none';
+                    isAppPaused = false;
+                    refreshCaptureShutterFromInputs();
+                    showResult(false, "Server analysis failed", 0, true, 0, null, null);
+                }
+            }, 'image/jpeg', 0.9);
+        }
+
+        function showResult(humanDetected, message, landmarksCount, isError = false, humanProbability = null, savedFilename = null, imageUrl = null) {
+            resultBackdrop.style.display = 'flex';
+            // Trigger reflow
+            void resultBackdrop.offsetWidth;
+            resultBackdrop.style.opacity = '1';
+            resultPanel.classList.add('show');
+
+            resultPanel.className = 'result-panel show ' + (isError ? 'fail' : 'success');
+            if (resultSubtitle) resultSubtitle.classList.remove('ok');
+
+            if (snapshotPreview) {
+                if (imageUrl) {
+                    snapshotPreview.src = imageUrl;
+                    snapshotPreview.style.display = 'block';
+                } else {
+                    snapshotPreview.style.display = 'none';
+                    snapshotPreview.removeAttribute('src');
+                }
+            }
+
+            if (btn2dTryon) {
+                btn2dTryon.style.display = (!isError && imageUrl && isAppAutoCameraMode()) ? 'block' : 'none';
+            }
+
+            if (isError) {
+                resultTitle.textContent = "Error";
+                resultTitle.style.color = "#ef4444";
+                resultSubtitle.textContent = message;
+            } else {
+                resultTitle.textContent = "Your photo";
+                resultTitle.style.color = "#22c55e";
+                if (resultSubtitle) resultSubtitle.classList.add('ok');
+                resultSubtitle.textContent = message || "Tap Go to 2D Try On to fit a kurta on this photo.";
+            }
+        }
+
+        function closeResultOverlayAndResume() {
+            resultBackdrop.style.opacity = '0';
+            resultPanel.classList.remove('show');
+
+            setTimeout(() => {
+                resultBackdrop.style.display = 'none';
+                snapshotPreview.style.display = 'none';
+
+                // Resume AI and tracking
+                isAppPaused = false;
+                _captureBusy = false;
+                poseState = 0;
+                instructions.className = "ui-content instructions-panel";
+                instructions.textContent = "Step front of the camera";
+                refreshCaptureShutterFromInputs();
+            }, 300);
+        }
+
+        closeResultBtn.addEventListener('click', () => {
+            closeResultOverlayAndResume();
+        });
+
+        if (btn2dTryon) {
+            btn2dTryon.addEventListener('click', () => navigateToFlutterTryOn());
+        }
+
+        if (move3dResultBtn) {
+            move3dResultBtn.addEventListener('click', () => {
+                postToFlutterHost({
+                    type: 'smartfitao_cv',
+                    phase: 'move_3d_avatar'
+                });
+                closeResultOverlayAndResume();
+            });
+        }
+
+    </script>
+</body>
+
+</html>

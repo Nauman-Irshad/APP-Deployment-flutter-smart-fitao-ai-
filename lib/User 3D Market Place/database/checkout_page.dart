@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
-import 'firebase_service.dart';
-import 'user_app_order.dart';
-import 'order_tracking_service.dart';
+
+import '../../payments/checkout_order_completion.dart';
+import '../../payments/stripe_pending_checkout.dart';
+import '../../payments/stripe_payment_service.dart';
+import '../marketplace_bottom_nav.dart';
+import '../shopping_cart.dart';
+import '../viewer_asset_src.dart';
 
 class CheckoutPage extends StatefulWidget {
-  final Map<String, dynamic> product;
-  /// Optional customer information passed from the previous page.
+  final Map<String, dynamic>? product;
+  final List<CartItem>? cartItems;
+  final int? subtotal;
+  final int? deliveryFee;
+  final int? total;
   final String? userName;
   final String? address;
   final double? reducedPrice;
 
   const CheckoutPage({
-    required this.product,
+    this.product,
+    this.cartItems,
+    this.subtotal,
+    this.deliveryFee,
+    this.total,
     this.userName,
     this.address,
     this.reducedPrice,
@@ -26,184 +37,356 @@ class _CheckoutPageState extends State<CheckoutPage> {
   int _quantity = 1;
   bool _isLoading = false;
 
-  double get totalPrice =>
-      (widget.product['price'] as num).toDouble() * _quantity;
+  List<CartItem> get _items =>
+      widget.cartItems ?? ShoppingCart.instance.items;
+
+  bool get _fromCart => widget.cartItems != null || _items.isNotEmpty;
+
+  int get _subtotal =>
+      widget.subtotal ?? _singleSubtotal;
+
+  int get _delivery =>
+      widget.deliveryFee ??
+      (_subtotal >= 5000 ? 0 : 1500);
+
+  int get _total =>
+      widget.total ?? (_subtotal + _delivery);
+
+  int get _singleSubtotal {
+    final p = widget.product;
+    if (p == null) return 0;
+    final price = (p['price'] as num?)?.toInt() ?? 0;
+    return price * _quantity;
+  }
+
+  String _rs(int n) =>
+      'PKR ${n.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAF9),
       appBar: AppBar(
-        title: const Text('Checkout'),
-        backgroundColor: Color(0xFF059669),
+        title: const Text('Order Summary'),
+        backgroundColor: const Color(0xFF059669),
+        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           children: [
-            // Product Summary
             Container(
               color: Colors.white,
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Order Summary',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 16),
-                  Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(
-                          widget.product['image'] ?? 'assets/1.webp',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
+                  const Text(
+                    'Order Summary',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_fromCart && _items.isNotEmpty)
+                    ..._items.map(_buildCartLine)
+                  else if (widget.product != null)
+                    _buildSingleProductRow(widget.product!),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (!_fromCart && widget.product != null) ...[
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Quantity',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          onPressed: _quantity > 1
+                              ? () => setState(() => _quantity--)
+                              : null,
+                          icon: const Icon(Icons.remove_circle),
+                          color: const Color(0xFF059669),
                         ),
-                      ),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$_quantity',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _quantity < 10
+                              ? () => setState(() => _quantity++)
+                              : null,
+                          icon: const Icon(Icons.add_circle),
+                          color: const Color(0xFF059669),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildPriceRow('Subtotal', _rs(_subtotal)),
+                  const Divider(),
+                  _buildPriceRow(
+                    'Shipping',
+                    _delivery == 0 ? 'Free' : _rs(_delivery),
+                    isShipping: true,
+                  ),
+                  const Divider(),
+                  _buildPriceRow('Total', _rs(_total), isTotal: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            color: Colors.white,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _placeOrder,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              widget.product['title'] ?? 'Product',
+                              'Pay & Place Order',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'PKR ${widget.product['price']}',
-                              style: TextStyle(
-                                color: Color(0xFF059669),
-                                fontWeight: FontWeight.bold,
                                 fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Secure checkout via Stripe',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.white70,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
-            SizedBox(height: 12),
-            // Quantity Selection
-            Container(
-              color: Colors.white,
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Quantity',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        onPressed: _quantity > 1
-                            ? () => setState(() => _quantity--)
-                            : null,
-                        icon: Icon(Icons.remove_circle),
-                        color: Color(0xFF059669),
-                      ),
-                      Container(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey[300]!),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _quantity.toString(),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _quantity < 10
-                            ? () => setState(() => _quantity++)
-                            : null,
-                        icon: Icon(Icons.add_circle),
-                        color: Color(0xFF059669),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 12),
-            // Price Breakdown
-            Container(
-              color: Colors.white,
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildPriceRow(
-                    'Subtotal',
-                    'PKR ${(widget.product['price'] * _quantity).toStringAsFixed(0)}',
-                  ),
-                  Divider(),
-                  _buildPriceRow(
-                    'Shipping',
-                    'Free',
-                    isShipping: true,
-                  ),
-                  Divider(),
-                  _buildPriceRow(
-                    'Total',
-                    'PKR ${totalPrice.toStringAsFixed(0)}',
-                    isTotal: true,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-          ],
-        ),
+          ),
+          MarketplaceBottomNav(
+            selectedIndex: 3,
+            onTap: (i) => MarketplaceBottomNav.goToTab(context, i),
+          ),
+        ],
       ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.all(16),
-        color: Colors.white,
-        child: SafeArea(
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _placeOrder,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF059669),
-              padding: EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+    );
+  }
+
+  Widget _buildCartLine(CartItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: _productImage(
+              item.imagePath,
+              width: 80,
+              height: 80,
+              isFabric: item.isFabric,
             ),
-            child: _isLoading
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : Text(
-                    'Place Order',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: _productDetails(item)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleProductRow(Map<String, dynamic> p) {
+    final imagePath =
+        p['imagePath']?.toString() ?? p['image']?.toString();
+    final isFabric = p['category'] == 'Fabric' || p['section'] == 'Fabric';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: _productImage(imagePath, width: 80, height: 80, isFabric: isFabric),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (p['brandName'] != null)
+                Text(
+                  '${p['brandName']}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              Text(
+                p['title']?.toString() ?? 'Product',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+              if (p['size'] != null)
+                Text('Size: ${p['size']}', style: _detailStyle),
+              if (p['color'] != null)
+                Text('Color: ${p['color']}', style: _detailStyle),
+              if (p['material'] != null)
+                Text('Material: ${p['material']}', style: _detailStyle),
+              const SizedBox(height: 6),
+              Text(
+                _rs((p['price'] as num?)?.toInt() ?? 0),
+                style: const TextStyle(
+                  color: Color(0xFF059669),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _productDetails(CartItem item) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.brandName,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+        Text(
+          item.title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: item.isFabric ? const Color(0xFFF0FDF4) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            item.isFabric ? 'Fabric · ${item.variantLabel}' : item.variantLabel,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: item.isFabric ? const Color(0xFF059669) : Colors.grey.shade800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('Size: ${item.size}', style: _detailStyle),
+        Text('Color: ${item.color}', style: _detailStyle),
+        Text('Material: ${item.material}', style: _detailStyle),
+        Text('Qty: ${item.quantity}', style: _detailStyle),
+        const SizedBox(height: 6),
+        Text(
+          _rs(item.lineTotal),
+          style: const TextStyle(
+            color: Color(0xFF059669),
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+      ],
+    );
+  }
+
+  TextStyle get _detailStyle =>
+      TextStyle(fontSize: 12, color: Colors.grey.shade700);
+
+  Widget _productImage(
+    String? path, {
+    required double width,
+    required double height,
+    required bool isFabric,
+  }) {
+    if (path != null &&
+        path.isNotEmpty &&
+        path.contains('landing page product')) {
+      return SizedBox(
+        width: width,
+        height: height,
+        child: buildLandingProductImage(
+          path,
+          fallback: _imageFallback(width, height, isFabric),
+        ),
+      );
+    }
+    if (path != null && path.startsWith('assets/')) {
+      return Image.asset(
+        path,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _imageFallback(width, height, isFabric),
+      );
+    }
+    return _imageFallback(width, height, isFabric);
+  }
+
+  Widget _imageFallback(double w, double h, bool isFabric) {
+    return Container(
+      width: w,
+      height: h,
+      color: Colors.grey.shade200,
+      child: Icon(
+        isFabric ? Icons.texture : Icons.checkroom,
+        color: Colors.grey.shade500,
       ),
     );
   }
@@ -216,17 +399,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         Text(
           label,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isTotal ? 16 : 14,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-            color: Colors.grey[700],
+            color: Colors.grey.shade700,
           ),
         ),
         Text(
           value,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: isTotal ? 18 : 14,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.w500,
-            color: isShipping ? Colors.green : Colors.black,
+            color: isShipping && value == 'Free'
+                ? Colors.green
+                : (isTotal ? const Color(0xFF111827) : Colors.black),
           ),
         ),
       ],
@@ -237,98 +422,75 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Simulating user ID - in real app, get from Firebase Auth
       final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+      final first = _items.isNotEmpty ? _items.first : null;
+      final title = first?.title ??
+          widget.product?['title']?.toString() ??
+          'Order';
+      final productId =
+          first?.id ?? widget.product?['id']?.toString() ?? 'unknown';
+      final category = first?.isFabric == true
+          ? 'Fabric'
+          : (widget.product?['category']?.toString() ?? 'General');
+      final imagePath = first?.imagePath ??
+          widget.product?['imagePath']?.toString() ??
+          widget.product?['image']?.toString() ??
+          '';
+      final qty = first?.quantity ?? _quantity;
+      final unitPrice = first?.price.toDouble() ??
+          (widget.product?['price'] as num?)?.toDouble() ??
+          0;
 
-      // tell user we're attempting to send to Firebase
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Sending order to Firebase...'),
-          backgroundColor: Colors.blue,
+      final description = _fromCart && _items.length > 1
+          ? '${_items.length} items · ${_rs(_total)}'
+          : 'Qty $qty · ${_rs(_total)}';
+
+      await StripePendingCheckout.save(
+        StripePendingCheckout(
+          userId: userId,
+          productId: productId,
+          productTitle: title,
+          quantity: qty,
+          unitPrice: unitPrice,
+          totalPkr: _total,
+          category: category,
+          productImage: imagePath,
+          userName: widget.userName,
+          address: widget.address,
+          reducedPrice: widget.reducedPrice ?? _total.toDouble(),
         ),
       );
 
-      try {
-        final orderId = await FirebaseService.placeOrder(
-          userId: userId,
-          productId: widget.product['id'].toString(),
-          productTitle: widget.product['title'],
-          quantity: _quantity,
-          price: (widget.product['price'] as num).toDouble(),
-          category: widget.product['category'],
-          productImage: widget.product['image'],
-          status: 'sent',
-          userName: widget.userName,
-          address: widget.address,
-          reducedPrice: widget.reducedPrice,
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Opening Stripe secure checkout...'),
+            backgroundColor: Color(0xFF059669),
+          ),
         );
-
-          // Increment tracking count for 'sent' status
-          try {
-            await OrderTrackingService.incrementStatusCount('sent');
-          } catch (e) {
-            print('Error incrementing tracking count: $e');
-          }
-        try {
-          final map = <String, dynamic>{
-            'userId': userId,
-            'productId': widget.product['id'].toString(),
-            'productTitle': widget.product['title'],
-            'quantity': _quantity,
-            'unitPrice': (widget.product['price'] as num).toDouble(),
-            'totalPrice': totalPrice,
-            'category': widget.product['category'] ?? '',
-            'productImage': widget.product['image'] ?? '',
-            'status': 'sent',
-          };
-          if (widget.userName != null) map['userName'] = widget.userName;
-          if (widget.address != null) map['address'] = widget.address;
-          if (widget.reducedPrice != null) map['reducedPrice'] = widget.reducedPrice;
-
-          await UserAppOrder.create(map);
-        } catch (e) {
-          print('Error writing to user_app_order: $e');
-        }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Order sent to Firebase! ID: $orderId'),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // Navigate back after 2 seconds
-          Future.delayed(Duration(seconds: 2), () {
-            if (mounted) {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            }
-          });
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error sending order to Firebase: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
       }
+
+      final session = await StripePaymentService.createCheckoutSession(
+        amountPkr: _total,
+        productName: title,
+        description: description,
+      );
+      await StripePaymentService.openCheckoutUrl(session.url);
     } catch (e) {
+      await StripePendingCheckout.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error placing order: $e'),
+            content: Text(
+              'Payment could not start. Is Stripe server running on port 8000? ($e)',
+            ),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'order_summary_screen.dart';
+import 'shopping_cart.dart';
+import 'database/checkout_page.dart';
 
 /// Allows only digits and at most one decimal point.
 class _NumericOnlyFormatter extends TextInputFormatter {
@@ -20,11 +21,13 @@ class _NumericOnlyFormatter extends TextInputFormatter {
 class StandardSizesScreen extends StatefulWidget {
   final Map<String, dynamic> product;
   final VoidCallback onBack;
+  final bool openCartOnComplete;
 
   const StandardSizesScreen({
     super.key,
     required this.product,
     required this.onBack,
+    this.openCartOnComplete = true,
   });
 
   @override
@@ -439,6 +442,7 @@ class _StandardSizesScreenState extends State<StandardSizesScreen> {
                               pyjamaSize: _selectedPyjamaSize!,
                               kurtaMeasurements: Map.from(_kurtaChart[_selectedKurtaSize]!),
                               pyjamaLength: _churidarChart[_selectedPyjamaSize]!['length'] ?? '',
+                              openCartOnComplete: widget.openCartOnComplete,
                             ),
                           ),
                         );
@@ -477,6 +481,7 @@ class FinalSizeChartScreen extends StatelessWidget {
   final String pyjamaSize;
   final Map<String, String> kurtaMeasurements;
   final String pyjamaLength;
+  final bool openCartOnComplete;
 
   const FinalSizeChartScreen({
     super.key,
@@ -485,6 +490,7 @@ class FinalSizeChartScreen extends StatelessWidget {
     required this.pyjamaSize,
     required this.kurtaMeasurements,
     required this.pyjamaLength,
+    this.openCartOnComplete = true,
   });
 
   @override
@@ -656,20 +662,31 @@ class FinalSizeChartScreen extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
+                  final sizeLabel = 'Kurta $kurtaSize / Pyjama $pyjamaSize';
+                  final item = cartItemFromProduct(
+                    product,
+                    size: sizeLabel,
+                    color: product['colorName']?.toString() ?? 'Standard',
+                    material: product['category']?.toString() ?? 'Stitched',
+                    quantity: 1,
+                  );
+                  ShoppingCart.instance.addItem(item);
+                  final cart = ShoppingCart.instance;
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => OrderSummaryScreen(
+                    MaterialPageRoute<void>(
+                      builder: (_) => CheckoutPage(
                         product: product,
-                        kurtaSize: kurtaSize,
-                        pyjamaSize: pyjamaSize,
-                        kurtaMeasurements: Map<String, String>.from(kurtaMeasurements),
-                        pyjamaLength: pyjamaLength,
+                        cartItems: List<CartItem>.from(cart.items),
+                        subtotal: cart.subtotal,
+                        deliveryFee: cart.deliveryFee,
+                        total: cart.total,
+                        reducedPrice: cart.total.toDouble(),
                       ),
                     ),
                   );
                 },
-                icon: Icon(Icons.shopping_cart_checkout, size: 22, color: Colors.white),
+                icon: Icon(Icons.payment, size: 22, color: Colors.white),
                 label: Text(
                   'Checkout',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),

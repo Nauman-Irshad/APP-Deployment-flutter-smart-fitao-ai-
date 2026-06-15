@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 
 import 'services/app_backend.dart';
 import 'tracking.dart' as tracking;
-import '../../seller_dashboard/bottom_navi.dart';
+import '../seller_dashboard/bottom_navi.dart';
 import '../User 3D Market Place/auth-login-sign/auth_ui.dart';
 import 'forgot_password_otp.dart';
 import 'auth_validators.dart';
 import 'auth_reset_memory.dart';
+import '../config/demo_accounts.dart';
+import '../services/demo_accounts_service.dart';
+import '../widgets/demo_login_button.dart';
 
 class LoginAsSellerScreen extends StatefulWidget {
   final VoidCallback? onBackToRolePicker;
@@ -136,7 +139,37 @@ class _LoginAsSellerScreenState extends State<LoginAsSellerScreen> {
                         Text('Welcome back', style: AuthUi.titleStyle(context)),
                         const SizedBox(height: 6),
                         Text('Login as Seller', style: AuthUi.subtitleStyle(context)),
-                        const SizedBox(height: 26),
+                        const SizedBox(height: 14),
+                        DemoLoginButton(
+                          label: 'Demo login',
+                          email: DemoAccounts.sellerEmail,
+                          password: DemoAccounts.sellerPassword,
+                          onFill: (e, p) {
+                            emailController.text = e;
+                            passwordController.text = p;
+                          },
+                          onSignIn: () async {
+                            setState(() => isLoading = true);
+                            try {
+                              await DemoAccountsService.signInDemoSeller();
+                              final uid = AppBackend.instance.currentUid;
+                              final profile = await AppBackend.instance.getUserProfile(uid);
+                              if (profile.role != 'seller') {
+                                await FirebaseAuth.instance.signOut();
+                                throw StateError('Not a seller account');
+                              }
+                              if (!context.mounted) return;
+                              await AuthResetMemory.saveLastRole('seller');
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => const BottomNavScreen()),
+                              );
+                            } finally {
+                              if (mounted) setState(() => isLoading = false);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
                         AuthTextField(
                           label: 'Email',
                           hint: 'Enter your email',

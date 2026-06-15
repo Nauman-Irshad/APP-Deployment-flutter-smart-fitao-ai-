@@ -1,0 +1,81 @@
+﻿{
+    "updatedAt":  "2026-06-03T20:28:57.9067359Z",
+    "products":  [
+                     {
+                         "id":  "fabric_black_jpg",
+                         "modelPath":  "landing page product/fabric/black.jpg",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/black.jpg"
+                     },
+                     {
+                         "id":  "fabric_fantansy_latha_webp",
+                         "modelPath":  "landing page product/fabric/fantansy latha.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/fantansy%20latha.webp"
+                     },
+                     {
+                         "id":  "fabric_gold_webp",
+                         "modelPath":  "landing page product/fabric/gold.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/gold.webp"
+                     },
+                     {
+                         "id":  "fabric_shan_e_mughal_latha_webp",
+                         "modelPath":  "landing page product/fabric/shan e mughal latha.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/shan%20e%20mughal%20latha.webp"
+                     },
+                     {
+                         "id":  "fabric_sky_blue_webp",
+                         "modelPath":  "landing page product/fabric/sky blue.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/sky%20blue.webp"
+                     },
+                     {
+                         "id":  "fabric_white_webp",
+                         "modelPath":  "landing page product/fabric/white.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/white.webp"
+                     },
+                     {
+                         "id":  "fabric_yellow_webp",
+                         "modelPath":  "landing page product/fabric/yellow.webp",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/fabric/yellow.webp"
+                     },
+                     {
+                         "id":  "kurta_black_kurta__glb",
+                         "modelPath":  "landing page product/kurta/black kurta .glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/kurta/black%20kurta%20.glb"
+                     },
+                     {
+                         "id":  "kurta_brown_kurta_glb",
+                         "modelPath":  "landing page product/kurta/brown kurta.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/kurta/brown%20kurta.glb"
+                     },
+                     {
+                         "id":  "kurta_sky_blue_kurta_glb",
+                         "modelPath":  "landing page product/kurta/sky blue kurta.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/kurta/sky%20blue%20kurta.glb"
+                     },
+                     {
+                         "id":  "kurta_WHITE_glb",
+                         "modelPath":  "landing page product/kurta/WHITE.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/kurta/WHITE.glb"
+                     },
+                     {
+                         "id":  "shalwar_kameez_black_shalwar_kameez_glb",
+                         "modelPath":  "landing page product/shalwar kameez/black shalwar kameez.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/shalwar%20kameez/black%20shalwar%20kameez.glb"
+                     },
+                     {
+                         "id":  "shalwar_kameez_brown_1_glb",
+                         "modelPath":  "landing page product/shalwar kameez/brown 1.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/shalwar%20kameez/brown%201.glb"
+                     },
+                     {
+                         "id":  "shalwar_kameez_navy_kurta_3d_model_glb",
+                         "modelPath":  "landing page product/shalwar kameez/navy kurta 3d model.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/shalwar%20kameez/navy%20kurta%203d%20model.glb"
+                     },
+                     {
+                         "id":  "shalwar_kameez_white_shalwar_kameez_glb",
+                         "modelPath":  "landing page product/shalwar kameez/white shalwar kameez.glb",
+                         "modelUrl":  "https://fyp-web-code-deployment-flea.vercel.app/landing%20page%20product/shalwar%20kameez/white%20shalwar%20kameez.glb"
+                     }
+                 ],
+    "cdnBase":  "https://fyp-web-code-deployment-flea.vercel.app"
+}

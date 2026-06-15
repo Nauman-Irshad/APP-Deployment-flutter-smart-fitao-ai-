@@ -1,0 +1,12 @@
+# Speed up Vercel upload — app code only; backends are remote
+android/
+ios/
+linux/
+macos/
+windows/
+.dart_tool/
+.idea/
+**/*.apk
+**/*.log
+**/reference_original_server/images/
+**/reference_original_server/ImageSaved/

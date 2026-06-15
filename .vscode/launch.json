@@ -2,18 +2,122 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "3D Landing (marketplace only, Edge)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_3d_landing.dart",
+      "args": [
+        "-d",
+        "edge",
+        "--web-port=65106"
+      ]
+    },
+    {
+      "name": "SmartFitao (Splash → main.dart, Edge)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "edge",
+        "--web-port=65106",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001",
+        "--dart-define=CV_CAMERA_BASE=http://127.0.0.1:5000",
+        "--dart-define=CLOTH_STUDIO_URL=https://fyp-web-code-deployment-flea.vercel.app/"
+      ]
+    },
+    {
+      "name": "SmartFitao + local NLP chat (Edge)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "edge",
+        "--web-port=65106",
+        "--dart-define=STUDIO_LOCAL_DEV=true",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001",
+        "--dart-define=CV_CAMERA_BASE=http://127.0.0.1:5000"
+      ]
+    },
+    {
+      "name": "SmartFitao + local NLP chat (Android emulator only)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "android",
+        "--dart-define=STUDIO_LOCAL_DEV=true"
+      ]
+    },
+    {
+      "name": "SmartFitao Phone — AI chat in APK (Android)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "-d",
+        "android"
+      ]
+    },
+    {
       "name": "3D Marketplace (Web, port 65106 for OAuth)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main_marketplace.dart",
-      "args": ["-d", "edge", "--web-port=65106"]
+      "args": [
+        "-d",
+        "edge",
+        "--web-port=65106",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001",
+        "--dart-define=CV_CAMERA_BASE=http://127.0.0.1:5000",
+        "--dart-define=CLOTH_STUDIO_URL=https://fyp-web-code-deployment-flea.vercel.app/"
+      ]
+    },
+    {
+      "name": "3D Marketplace (Windows — needs VS C++ workload)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_marketplace.dart",
+      "args": [
+        "-d",
+        "windows",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001"
+      ]
+    },
+    {
+      "name": "3D Landing (Android — hot reload)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_3d_landing.dart",
+      "args": [
+        "-d",
+        "android"
+      ]
+    },
+    {
+      "name": "3D Marketplace (Android, camera first)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_marketplace.dart",
+      "args": [
+        "-d",
+        "android",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001"
+      ]
     },
     {
       "name": "3D Marketplace (Web, Chrome, port 65106)",
       "request": "launch",
       "type": "dart",
       "program": "lib/main_marketplace.dart",
-      "args": ["-d", "chrome", "--web-port=65106"]
+      "args": [
+        "-d",
+        "chrome",
+        "--web-port=65106",
+        "--dart-define=CLOTH_PREDICT_BASE=http://127.0.0.1:5001"
+      ]
     }
   ]
 }
