@@ -7,6 +7,10 @@ class ProductionUrls {
 
   static const String sizeApi = 'https://fyp-backend-hi10.onrender.com';
 
+  /// IDM-VTON FastAPI on Render (not the shop Vercel SPA).
+  static const String tryOnApi =
+      'https://threed-studio-deploymentt.onrender.com';
+
   static const String cvCamera =
       'https://qr-code-scan-computer-visionj-git-main-nauman-irshads-projects.vercel.app';
 

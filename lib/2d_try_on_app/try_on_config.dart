@@ -26,10 +26,10 @@ class TryOnConfig {
     final h = _localHost.trim();
     if (h.isNotEmpty) return 'http://$h:8765';
     if (LiveBackendConfig.isPhoneOrTabletApp) {
-      return ProductionUrls.shop.replaceAll(RegExp(r'/+$'), '');
+      return ProductionUrls.tryOnApi.replaceAll(RegExp(r'/+$'), '');
     }
     if (LiveBackendConfig.useLocalOnWeb) return 'http://127.0.0.1:8765';
-    return ProductionUrls.shop.replaceAll(RegExp(r'/+$'), '');
+    return ProductionUrls.tryOnApi.replaceAll(RegExp(r'/+$'), '');
   }
 
   static String apiUrl(String path) {

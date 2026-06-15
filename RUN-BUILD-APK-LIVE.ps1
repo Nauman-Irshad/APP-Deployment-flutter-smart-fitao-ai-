@@ -17,12 +17,13 @@ Set-Location $PSScriptRoot
 
 $shop = 'https://fyp-web-code-deployment-flea.vercel.app'
 $render = 'https://fyp-backend-hi10.onrender.com'
+$tryon = 'https://threed-studio-deploymentt.onrender.com'
 $cv = 'https://qr-code-scan-computer-visionj-git-main-nauman-irshads-projects.vercel.app'
 
 $defines = @(
     "--dart-define=CLOTH_PREDICT_BASE=$render",
     "--dart-define=CLOTH_STUDIO_URL=$shop/",
-    "--dart-define=TRYON_API_BASE=$shop",
+    "--dart-define=TRYON_API_BASE=$tryon",
     "--dart-define=CV_CAMERA_BASE=$cv",
     "--dart-define=SIZE_API_LOCAL=false"
 )

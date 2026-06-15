@@ -7,7 +7,8 @@ Repo: [APP-Deployment-flutter-smart-fitao-ai-](https://github.com/Nauman-Irshad/
 - Full Flutter app starting at **splash screen** → onboarding → login → 3D marketplace
 - Live backends (no localhost):
   - **Size API:** `https://fyp-backend-hi10.onrender.com`
-  - **2D try-on + studio:** `https://fyp-web-code-deployment-flea.vercel.app`
+  - **2D try-on API:** `https://threed-studio-deploymentt.onrender.com` (Render FastAPI)
+  - **2D studio UI:** `https://fyp-web-code-deployment-flea.vercel.app`
   - **3D / reels CDN:** Cloudflare R2
   - **Stripe:** `https://smartfitao-stripe-api.onrender.com`
 
@@ -19,7 +20,7 @@ Large files are **not** pushed to GitHub or Vercel. The app loads them online:
 |-------|--------|
 | Reel videos | Cloudflare R2 (`production_urls.dart` → `reel1`…`reel5`) |
 | 3D kurta / shalwar GLB | R2 CDN (`ProductionUrls.glbKurtaBlack`, etc.) |
-| 2D try-on API | `https://fyp-web-code-deployment-flea.vercel.app` |
+| 2D try-on API | `https://threed-studio-deploymentt.onrender.com` |
 
 Local `*.glb`, `*.mp4`, and `web/reels_videos/` are in `.gitignore` and `.vercelignore`.
 
@@ -44,7 +45,7 @@ cd "E:\fyp whole backend\App"
 flutter build web --release `
   --dart-define=CLOTH_PREDICT_BASE=https://fyp-backend-hi10.onrender.com `
   --dart-define=CLOTH_STUDIO_URL=https://fyp-web-code-deployment-flea.vercel.app/ `
-  --dart-define=TRYON_API_BASE=https://fyp-web-code-deployment-flea.vercel.app `
+  --dart-define=TRYON_API_BASE=https://threed-studio-deploymentt.onrender.com `
   --dart-define=MEDIA_CDN_BASE=https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/ `
   --dart-define=STRIPE_PAYMENT_BASE=https://smartfitao-stripe-api.onrender.com `
   --dart-define=SIZE_API_LOCAL=false
