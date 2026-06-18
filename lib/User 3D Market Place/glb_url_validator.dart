@@ -15,6 +15,11 @@ class GlbUrlValidator {
   static Future<bool> isReachable(String url) async {
     final key = url.trim();
     if (key.isEmpty) return false;
+    // Firebase Storage GLBs work in model-viewer; HEAD often returns 403.
+    if (_isFirebaseStorageUrl(key)) {
+      _cache[key] = true;
+      return true;
+    }
     final cached = _cache[key];
     if (cached != null) return cached;
 
@@ -30,6 +35,12 @@ class GlbUrlValidator {
         _inFlight.remove(key);
       }
     });
+  }
+
+  static bool _isFirebaseStorageUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('firebasestorage.googleapis.com') ||
+        lower.contains('firebasestorage.app');
   }
 
   static Future<bool> _probe(String url) async {

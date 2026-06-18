@@ -7,11 +7,11 @@ Last updated: 2026-06-06. Test on your target device (web vs Android) — some i
 | Login / logout (orders kept) | Yes | Yes | Yes | **Yes** | Logout no longer wipes all prefs |
 | Back button → previous screen | Yes | Yes | Yes | **Mostly** | Marketplace logout uses pop; some auth OTP screens may still reset stack |
 | 3D marketplace browse | Yes | — | — | **Yes** | Bundled + Firestore seller products |
-| Product upload (seller) | — | — | Yes | **Yes** | Active products show on 3D marketplace |
+| Product upload (seller) | — | — | Yes | **Yes** | Firebase Storage when deployed (no local server) |
 | Seller products list | — | — | Yes | **Yes** | Shows 2 bundled marketplace items + upload status; Firestore uploads below |
 | Reels playback | Yes | — | — | **Yes** | Fixed: uses working R2 desktop URLs (not broken mobile/720p) |
 | Reels — all videos button | Yes | — | — | **Yes** | “All videos” on Reel tab |
-| Reels — tailor upload | — | Yes | — | **Yes** | Add video in nav; new reel first + snackbar + Home/Reel badge |
+| Reels — tailor upload | — | Yes | — | **Yes** | Your video → Firebase; customers get red Reel badge |
 | Order tracking (6 steps custom) | Yes | Yes | Yes | **Yes** | Horizontal scroll + scrollbar; swipe hint on card |
 | Order tracking — more details | Yes | Yes | Yes | **Yes** | Horizontal scroll so buttons not clipped on narrow phones |
 | Tailor ↔ customer chat | Yes | Yes | — | **Yes** | Firebase; tailor Messages tab + badge |

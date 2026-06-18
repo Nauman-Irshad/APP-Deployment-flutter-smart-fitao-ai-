@@ -64,6 +64,23 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
       );
     }
 
+    // Prefer live 3D GLB (Firebase / R2) over flat image preview.
+    final modelSrc = modelSrcForProduct(widget.product);
+    if (modelSrc.isNotEmpty && productHasRemoteGlbUrl(widget.product)) {
+      return SizedBox(
+        height: viewerHeight,
+        width: double.infinity,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: ProductModelPreview(
+            src: modelSrc,
+            alt: widget.product['title']?.toString() ?? 'Outfit preview',
+            compact: false,
+          ),
+        ),
+      );
+    }
+
     final imagePath = widget.product['imagePath']?.toString();
     if (imagePath != null && imagePath.isNotEmpty) {
       return SizedBox(
@@ -76,15 +93,14 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
       );
     }
 
-    final src = modelSrcForProduct(widget.product);
-    if (src.isEmpty) return _noModelPlaceholder();
+    if (modelSrc.isEmpty) return _noModelPlaceholder();
     return SizedBox(
       height: viewerHeight,
       width: double.infinity,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: ProductModelPreview(
-          src: src,
+          src: modelSrc,
           alt: widget.product['title']?.toString() ?? 'Outfit preview',
           compact: false,
         ),

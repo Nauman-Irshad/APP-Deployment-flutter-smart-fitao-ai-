@@ -75,6 +75,9 @@ List<Map<String, dynamic>> categoryProductsWithGlbOrFabric(
         final cat =
             p['section']?.toString() ?? p['category']?.toString() ?? '';
         if (cat == 'Fabric') return true;
+        if (p['isSellerListing'] == true && productHasRemoteGlbUrl(p)) {
+          return true;
+        }
         final id = p['id']?.toString() ?? '';
         return id.isNotEmpty && reachableIds.contains(id);
       })

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import 'firebase_media_upload_service.dart';
+import 'upload_target.dart';
 
 /// Pick tailor reel from gallery; upload to local dev server or Firebase Storage.
 class TailorReelUploadService {
@@ -95,8 +96,8 @@ class TailorReelUploadService {
     if (bytes.isEmpty) {
       throw StateError('Video file is empty');
     }
-    final localOk = await isServerReachable();
-    if (localOk) {
+    final useLocal = !preferFirebaseUpload && await isServerReachable();
+    if (useLocal) {
       final url = await _uploadToLocalServer(
         bytes: bytes,
         fileName: fileName,

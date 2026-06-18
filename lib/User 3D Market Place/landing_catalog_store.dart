@@ -52,9 +52,11 @@ class LandingCatalogStore extends ChangeNotifier {
       final cat =
           p['section']?.toString() ?? p['category']?.toString() ?? '';
       if (cat == 'Fabric') return true;
+      if (p['isSellerListing'] == true && productHasRemoteGlbUrl(p)) {
+        return true;
+      }
       if (!productHasRemoteGlbUrl(p)) return false;
       final id = p['id']?.toString() ?? '';
-      // Always show 4 kurta from catalog (R2 URLs) — network probe must not hide them.
       if (_isBundledProductId(id)) return true;
       if (!_glbCheckComplete) return true;
       return id.isNotEmpty && _reachableGlbIds.contains(id);
@@ -88,18 +90,36 @@ class LandingCatalogStore extends ChangeNotifier {
     return null;
   }
 
-  /// Landing home grid — original 4 bundled items only (seller items are not mixed in).
+  /// Landing home grid — seller uploads first, then bundled (per category).
   List<Map<String, dynamic>> previewForSection(String section) {
     try {
-      final base = originalBundledForSection(
+      final seller = _sellerProductsForSection(section);
+      final bundled = originalBundledForSection(
         section,
         limit: kProductsPerLandingCategory,
       );
-      if (base.isEmpty && section != 'Fabric') return const [];
-      return base.map((p) {
+      final seen = <String>{};
+      final out = <Map<String, dynamic>>[];
+
+      void add(Map<String, dynamic> p) {
+        final id = p['firebaseProductId']?.toString() ??
+            p['id']?.toString() ??
+            '';
+        if (id.isNotEmpty) {
+          if (seen.contains(id)) return;
+          seen.add(id);
+        }
+        out.add(Map<String, dynamic>.from(p));
+      }
+
+      for (final p in seller) {
+        add(p);
+      }
+      for (final p in bundled) {
         final loaded = _loadedBundledById(p['id']?.toString());
-        return loaded ?? p;
-      }).toList(growable: false);
+        add(loaded ?? p);
+      }
+      return out;
     } catch (e, st) {
       debugPrint('previewForSection($section): $e\n$st');
       return instance.originalBundledForSection(
@@ -107,6 +127,14 @@ class LandingCatalogStore extends ChangeNotifier {
         limit: kProductsPerLandingCategory,
       );
     }
+  }
+
+  List<Map<String, dynamic>> _sellerProductsForSection(String section) {
+    if (!kIncludeSellerListingsInMarketplace) return const [];
+    final seller = MarketplaceFirebaseCatalog.forSection(section);
+    return _filterListable(
+      seller.map((p) => Map<String, dynamic>.from(p)..['isSellerListing'] = true).toList(),
+    );
   }
 
   /// Seller listings sync — always resolves [AppBackend.instance] at call time (web hot-reload safe).
@@ -236,13 +264,19 @@ class LandingCatalogStore extends ChangeNotifier {
             if (seenSeller.contains(id)) continue;
             seenSeller.add(id);
           }
+          if (!productHasRemoteGlbUrl(p)) continue;
+          if (p['isSellerListing'] == true) {
+            out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
+            continue;
+          }
           if (!_glbCheckComplete) {
-            if (!productHasRemoteGlbUrl(p)) continue;
+            out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
           } else {
             final pid = p['id']?.toString() ?? '';
-            if (pid.isEmpty || !_reachableGlbIds.contains(pid)) continue;
+            if (pid.isNotEmpty && _reachableGlbIds.contains(pid)) {
+              out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
+            }
           }
-          out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
         }
       }
       return _filterListable(out);
