@@ -132,6 +132,7 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
     _startBannerAutoScroll();
     _loadTrackingCounts();
     MarketplaceBadgeService.instance.ensureLoaded();
+    MarketplaceBadgeService.instance.startFirebaseSync();
     LandingCatalogStore.instance.addListener(_onLandingCatalogChanged);
     if (kIncludeSellerListingsInMarketplace) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

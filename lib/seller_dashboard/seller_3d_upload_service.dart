@@ -7,9 +7,9 @@ import 'package:http/http.dart' as http;
 
 import 'seller_3d_file_picker.dart';
 import 'seller_3d_folder.dart';
+import '../services/firebase_media_upload_service.dart';
 
-/// Uploads GLB folder to local product server (same as React `sellerProducts.js`).
-/// Start server: `App\scripts\start-local-product-server.ps1` (port 5190).
+/// Uploads GLB to local dev server (5190) or Firebase Storage when deployed.
 class Seller3dUploadService {
   Seller3dUploadService._();
 
@@ -45,6 +45,35 @@ class Seller3dUploadService {
       return Seller3dFolderIo.instance.readPath(f.path!);
     }
     throw StateError('Could not read ${f.name}');
+  }
+
+  static Future<({String modelUrl, String? imageUrl})?> uploadModelFiles({
+    required List<PlatformFile> files,
+    required String sellerId,
+    void Function(String message)? onProgress,
+  }) async {
+    if (files.isEmpty) return null;
+
+    final productKey = '${DateTime.now().millisecondsSinceEpoch}';
+    final localOk = await isServerReachable();
+    if (localOk) {
+      onProgress?.call('Uploading to local 3D server…');
+      final url = await uploadFilesAsZip(files: files, onProgress: onProgress);
+      if (url.isEmpty) return null;
+      String? imageUrl;
+      final key = RegExp(r'/models/([^/]+)/').firstMatch(url)?.group(1);
+      if (key != null) {
+        imageUrl = previewImageUrl(files, key);
+      }
+      return (modelUrl: url, imageUrl: imageUrl);
+    }
+
+    return FirebaseMediaUploadService.uploadSellerModelFiles(
+      files: files,
+      sellerId: sellerId,
+      productKey: productKey,
+      onProgress: onProgress,
+    );
   }
 
   static Future<String?> uploadFilesAsZip({
@@ -94,9 +123,7 @@ class Seller3dUploadService {
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw StateError(
-        'Upload failed (${res.statusCode}). Start the local product server: App\\scripts\\start-local-product-server.ps1',
-      );
+      throw StateError('Upload failed (${res.statusCode}). Try again or check your connection.');
     }
 
     final body = jsonDecode(res.body);

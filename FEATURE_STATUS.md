@@ -42,6 +42,13 @@ flutter run --dart-define=STUDIO_LOCAL_DEV=true
 
 Phone on same Wi‑Fi: add `--dart-define=LOCAL_DEV_HOST=YOUR_PC_IP`.
 
+## Firebase Storage (seller 3D + tailor reels)
+
+Uploads on **deployed** app go to Firebase Storage (not localhost). In Firebase Console → Storage → Rules, allow authenticated seller/tailor writes and public reads for:
+
+- `seller-products/{sellerId}/**`
+- `marketplace-reels/{tailorId}/**`
+
 ## Demo accounts
 
 - Customer: `alismartfitao@gmail.com` / `Ali@12345`

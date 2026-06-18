@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
-import '../config/production_urls.dart';
 import '../Order-Tracking-System/services/app_backend.dart';
 import '../services/reel_catalog_service.dart';
 import '../services/tailor_reel_upload_service.dart';
@@ -111,29 +110,18 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
     try {
       var videoUrl = _uploadedUrl ?? '';
       if (videoUrl.isEmpty && _pickedVideo != null) {
-        setState(() => _status = 'Uploading video…');
-        final serverOk = await TailorReelUploadService.isServerReachable();
-        if (serverOk) {
-          videoUrl = await TailorReelUploadService.uploadPickedVideo(
-                _pickedVideo!,
-                onProgress: (m) {
-                  if (mounted) setState(() => _status = m);
-                },
-              ) ??
-              '';
-        }
-        if (videoUrl.isEmpty) {
-          videoUrl = ProductionUrls.reel4Mobile;
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Local server offline — saved with demo video URL. Start start-local-product-server.ps1 for your file.',
-                ),
-              ),
-            );
-          }
-        }
+        setState(() => _status = 'Uploading your video…');
+        videoUrl = await TailorReelUploadService.uploadPickedVideo(
+          _pickedVideo!,
+          tailorId: user.uid,
+          onProgress: (m) {
+            if (mounted) setState(() => _status = m);
+          },
+        );
+      }
+
+      if (videoUrl.isEmpty) {
+        throw StateError('Could not upload video. Check internet and try again.');
       }
 
       final profile = _profile ?? await AppBackend.instance.getUserProfile(user.uid);
@@ -144,12 +132,11 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
         shopName: shop,
         videoTitle: title,
         videoUrl: videoUrl,
-        fallbackVideoUrl: ProductionUrls.reelMobileFallback,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Reel uploaded — customers see it on marketplace Reels'),
+          content: Text('Video uploaded successfully — customers see it on Reels with a red notification'),
           backgroundColor: Color(0xFF059669),
         ),
       );

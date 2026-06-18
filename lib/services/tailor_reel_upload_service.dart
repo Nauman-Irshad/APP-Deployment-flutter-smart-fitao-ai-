@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
-/// Pick tailor reel from gallery and upload to local media server (port 5190).
+import 'firebase_media_upload_service.dart';
+
+/// Pick tailor reel from gallery; upload to local dev server or Firebase Storage.
 class TailorReelUploadService {
   TailorReelUploadService._();
 
@@ -30,7 +32,6 @@ class TailorReelUploadService {
     }
   }
 
-  /// Gallery / photo library video picker.
   static Future<XFile?> pickVideoFromGallery() async {
     try {
       return await _picker.pickVideo(
@@ -42,7 +43,6 @@ class TailorReelUploadService {
     }
   }
 
-  /// Fallback file picker (some desktops / web).
   static Future<PlatformFile?> pickVideoFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.video,
@@ -53,14 +53,9 @@ class TailorReelUploadService {
     return result.files.first;
   }
 
-  static Future<Uint8List> _readXFile(XFile file) async {
-    if (kIsWeb) {
-      return await file.readAsBytes();
-    }
-    return await file.readAsBytes();
-  }
+  static Future<Uint8List> _readXFile(XFile file) => file.readAsBytes();
 
-  static Future<String?> uploadVideoBytes({
+  static Future<String?> _uploadToLocalServer({
     required Uint8List bytes,
     required String fileName,
     void Function(String message)? onProgress,
@@ -78,11 +73,7 @@ class TailorReelUploadService {
       headers: {'content-type': 'video/mp4'},
       body: bytes,
     );
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw StateError(
-        'Video upload failed (${res.statusCode}). Run App\\scripts\\start-local-product-server.ps1',
-      );
-    }
+    if (res.statusCode < 200 || res.statusCode >= 300) return null;
     final body = jsonDecode(res.body);
     if (body is Map) {
       final url = body['videoUrl']?.toString() ?? '';
@@ -94,15 +85,44 @@ class TailorReelUploadService {
     return '$_api/local-reels/videos/$reelKey/$safeName';
   }
 
-  static Future<String?> uploadPickedVideo(
+  /// Local server when running; otherwise Firebase Storage (deployed app).
+  static Future<String> uploadVideo({
+    required Uint8List bytes,
+    required String fileName,
+    required String tailorId,
+    void Function(String message)? onProgress,
+  }) async {
+    if (bytes.isEmpty) {
+      throw StateError('Video file is empty');
+    }
+    final localOk = await isServerReachable();
+    if (localOk) {
+      final url = await _uploadToLocalServer(
+        bytes: bytes,
+        fileName: fileName,
+        onProgress: onProgress,
+      );
+      if (url != null && url.isNotEmpty) return url;
+    }
+    return FirebaseMediaUploadService.uploadReelVideo(
+      bytes: bytes,
+      tailorId: tailorId,
+      fileName: fileName,
+      onProgress: onProgress,
+    );
+  }
+
+  static Future<String> uploadPickedVideo(
     XFile file, {
+    required String tailorId,
     void Function(String message)? onProgress,
   }) async {
     onProgress?.call('Reading video…');
     final bytes = await _readXFile(file);
-    return uploadVideoBytes(
+    return uploadVideo(
       bytes: bytes,
       fileName: file.name.isNotEmpty ? file.name : 'reel.mp4',
+      tailorId: tailorId,
       onProgress: onProgress,
     );
   }

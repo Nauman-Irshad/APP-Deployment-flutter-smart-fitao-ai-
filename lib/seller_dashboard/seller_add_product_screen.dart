@@ -37,24 +37,12 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
   String? _pickedImageName;
   List<PlatformFile> _picked3dFiles = [];
   String? _uploadStatus;
-  bool? _localServerOk;
 
   static const _categories = [
     'Kurta Shalwar',
     'Shalwar Kameez',
     'Fabric',
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    _checkLocalServer();
-  }
-
-  Future<void> _checkLocalServer() async {
-    final ok = await Seller3dUploadService.isServerReachable();
-    if (mounted) setState(() => _localServerOk = ok);
-  }
 
   @override
   void dispose() {
@@ -196,33 +184,20 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
     });
     try {
       if (_picked3dFiles.isNotEmpty) {
-        final serverOk = await Seller3dUploadService.isServerReachable();
-        if (!serverOk) {
-          throw StateError(
-            'Local 3D server is not running. In PowerShell run: App\\scripts\\start-local-product-server.ps1',
-          );
-        }
         setState(() => _uploadStatus = 'Uploading 3D model…');
-        final url = await Seller3dUploadService.uploadFilesAsZip(
+        final uploaded = await Seller3dUploadService.uploadModelFiles(
           files: _picked3dFiles,
+          sellerId: uid,
           onProgress: (m) {
             if (mounted) setState(() => _uploadStatus = m);
           },
         );
-        if (url != null && url.isNotEmpty) {
-          modelPath = url;
-          _modelUrl.text = url;
-        }
-        if (imageUrl.isEmpty) {
-          final key = RegExp(r'/models/([^/]+)/')
-              .firstMatch(modelPath)
-              ?.group(1);
-          if (key != null) {
-            final img = Seller3dUploadService.previewImageUrl(_picked3dFiles, key);
-            if (img != null) {
-              imageUrl = img;
-              _imageUrl.text = img;
-            }
+        if (uploaded != null) {
+          modelPath = uploaded.modelUrl;
+          _modelUrl.text = modelPath;
+          if (imageUrl.isEmpty && uploaded.imageUrl != null) {
+            imageUrl = uploaded.imageUrl!;
+            _imageUrl.text = imageUrl;
           }
         }
       }
@@ -493,20 +468,6 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
             style: TextStyle(fontSize: 12, color: Colors.grey[700]),
           ),
           const SizedBox(height: 8),
-          if (_localServerOk == false)
-            Container(
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: const Text(
-                'Start local 3D server first:\nApp\\scripts\\start-local-product-server.ps1\n(then hot restart this app)',
-                style: TextStyle(fontSize: 12, color: Colors.black87),
-              ),
-            ),
           Row(
             children: [
               Expanded(
