@@ -1,8 +1,10 @@
+import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
+import 'model_viewer_load_bridge.dart';
 import 'viewer_asset_src.dart';
 
 final Set<String> _registeredViewTypes = <String>{};
@@ -12,6 +14,28 @@ bool _skipCrossOrigin(String src) {
   return isFirebaseStorageGlbUrl(src);
 }
 
+void _wireModelViewerEvents(web.HTMLElement mv, String bridgeKey) {
+  final bridge = ModelViewerLoadBridge.forKey(bridgeKey);
+
+  void onLoad(web.Event _) {
+    bridge.markLoaded();
+  }
+
+  void onError(web.Event _) {
+    bridge.markError(
+      'Could not display this 3D file. The GLB may be invalid or blocked.',
+    );
+  }
+
+  void onProgress(web.Event event) {
+    bridge.setStep(2, progressPercent: bridge.progress < 70 ? 70 : bridge.progress + 2);
+  }
+
+  mv.addEventListener('load', onLoad.toJS);
+  mv.addEventListener('error', onError.toJS);
+  mv.addEventListener('progress', onProgress.toJS);
+}
+
 /// Web: DOM [model-viewer] with crossorigin before src (innerHTML scripts do not run).
 Widget buildR2ModelViewer({
   required String src,
@@ -19,8 +43,11 @@ Widget buildR2ModelViewer({
   required bool compact,
   required Color backgroundColor,
   int staggerIndex = 0,
+  String? loadBridgeKey,
 }) {
-  final viewType = 'r2-mv-${src.hashCode.abs()}-${compact ? 'c' : 'f'}-$staggerIndex';
+  final bridgeKey = loadBridgeKey ?? 'mv-${src.hashCode}-$staggerIndex';
+  final viewType =
+      'r2-mv-${src.hashCode.abs()}-${compact ? 'c' : 'f'}-$staggerIndex-$bridgeKey';
   if (!_registeredViewTypes.contains(viewType)) {
     _registeredViewTypes.add(viewType);
     const bgCss = '#141414';
@@ -56,13 +83,13 @@ Widget buildR2ModelViewer({
       mv.setAttribute('auto-rotate-delay', '0');
       mv.setAttribute('rotation-per-second', rotate);
       mv.setAttribute('interaction-prompt', 'none');
-      // Drag on product = orbit/rotate (cursor over card).
       mv.setAttribute('camera-controls', '');
       mv.setAttribute('touch-action', 'none');
       if (compact) {
         mv.setAttribute('disable-zoom', '');
       }
       mv.style.cursor = 'grab';
+      _wireModelViewerEvents(mv, bridgeKey);
       mv.setAttribute('src', src);
       root.append(mv);
       return root;

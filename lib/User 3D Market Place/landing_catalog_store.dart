@@ -90,36 +90,18 @@ class LandingCatalogStore extends ChangeNotifier {
     return null;
   }
 
-  /// Landing home grid — seller uploads first, then bundled (per category).
+  /// Landing home grid — bundled catalog only (seller items on See more page).
   List<Map<String, dynamic>> previewForSection(String section) {
     try {
-      final seller = _sellerProductsForSection(section);
-      final bundled = originalBundledForSection(
+      final base = originalBundledForSection(
         section,
         limit: kProductsPerLandingCategory,
       );
-      final seen = <String>{};
-      final out = <Map<String, dynamic>>[];
-
-      void add(Map<String, dynamic> p) {
-        final id = p['firebaseProductId']?.toString() ??
-            p['id']?.toString() ??
-            '';
-        if (id.isNotEmpty) {
-          if (seen.contains(id)) return;
-          seen.add(id);
-        }
-        out.add(Map<String, dynamic>.from(p));
-      }
-
-      for (final p in seller) {
-        add(p);
-      }
-      for (final p in bundled) {
+      if (base.isEmpty && section != 'Fabric') return const [];
+      return base.map((p) {
         final loaded = _loadedBundledById(p['id']?.toString());
-        add(loaded ?? p);
-      }
-      return out;
+        return loaded ?? p;
+      }).toList(growable: false);
     } catch (e, st) {
       debugPrint('previewForSection($section): $e\n$st');
       return instance.originalBundledForSection(
@@ -127,6 +109,11 @@ class LandingCatalogStore extends ChangeNotifier {
         limit: kProductsPerLandingCategory,
       );
     }
+  }
+
+  /// Seller uploads in this category (shown only on See more page, at the end).
+  int sellerListingCountForSection(String section) {
+    return _sellerProductsForSection(section).length;
   }
 
   List<Map<String, dynamic>> _sellerProductsForSection(String section) {
@@ -248,13 +235,13 @@ class LandingCatalogStore extends ChangeNotifier {
   /// Re-check after Firebase seller sync.
   Future<void> refreshGlbReachability() => _validateGlbLinks();
 
-  /// See more / category page — bundled + seller, no dead GLB listings.
+  /// See more / category page — bundled first, seller uploads last.
   List<Map<String, dynamic>> allForSection(String section) {
     try {
       final bundled = _allBundledForSection(section);
       final seller = MarketplaceFirebaseCatalog.forSection(section);
       final seenSeller = <String>{};
-      final out = <Map<String, dynamic>>[...bundled];
+      final sellerOnly = <Map<String, dynamic>>[];
 
       if (kIncludeSellerListingsInMarketplace) {
         for (final p in seller) {
@@ -265,21 +252,12 @@ class LandingCatalogStore extends ChangeNotifier {
             seenSeller.add(id);
           }
           if (!productHasRemoteGlbUrl(p)) continue;
-          if (p['isSellerListing'] == true) {
-            out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
-            continue;
-          }
-          if (!_glbCheckComplete) {
-            out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
-          } else {
-            final pid = p['id']?.toString() ?? '';
-            if (pid.isNotEmpty && _reachableGlbIds.contains(pid)) {
-              out.add(Map<String, dynamic>.from(p)..['isSellerListing'] = true);
-            }
-          }
+          sellerOnly.add(
+            Map<String, dynamic>.from(p)..['isSellerListing'] = true,
+          );
         }
       }
-      return _filterListable(out);
+      return _filterListable([...bundled, ...sellerOnly]);
     } catch (e, st) {
       debugPrint('allForSection($section): $e\n$st');
       return _allBundledForSection(section);

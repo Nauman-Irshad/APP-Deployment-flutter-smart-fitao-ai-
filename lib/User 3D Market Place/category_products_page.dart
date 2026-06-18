@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../services/marketplace_badge_service.dart';
 import '../../services/marketplace_demo_seller.dart';
 import 'fabric_product_screen.dart';
 import 'landing_catalog_store.dart';
@@ -60,6 +60,34 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
       try {
         LandingCatalogStore.instance.startFirebaseSync();
       } catch (_) {}
+      _notifySellerListings();
+      MarketplaceBadgeService.instance.clearNewProducts();
+    });
+  }
+
+  void _notifySellerListings() {
+    final products = landingAllProductsForSection(widget.sectionTitle);
+    final sellerCount =
+        products.where((p) => p['isSellerListing'] == true).length;
+    final newGlobal = MarketplaceBadgeService.instance.newProducts;
+    if (sellerCount <= 0 && newGlobal <= 0) return;
+
+    final msg = newGlobal > 0
+        ? '$newGlobal new product${newGlobal == 1 ? '' : 's'} listed — scroll to the bottom'
+        : sellerCount == 1
+            ? '1 seller product at the bottom — drag on card to rotate 3D'
+            : '$sellerCount seller products at the bottom — drag to rotate 3D';
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF059669),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     });
   }
 
@@ -101,7 +129,14 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
       landingAllProductsForSection(widget.sectionTitle),
       reachableIds: store.reachableGlbIds,
       glbCheckComplete: store.glbCheckComplete,
-    );
+    )
+      ..sort((a, b) {
+        final aSeller = a['isSellerListing'] == true ? 1 : 0;
+        final bSeller = b['isSellerListing'] == true ? 1 : 0;
+        return aSeller.compareTo(bSeller);
+      });
+    final sellerCount =
+        products.where((p) => p['isSellerListing'] == true).length;
     final sellers = _sellersIn(products);
     final w = MediaQuery.sizeOf(context).width;
     final cols = _columns(w);
@@ -123,7 +158,8 @@ class _CategoryProductsPageState extends State<CategoryProductsPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '${products.length} products',
+              '${products.length} products'
+              '${sellerCount > 0 ? ' · $sellerCount seller upload${sellerCount == 1 ? '' : 's'} at bottom' : ''}',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
             ),
             if (sellers.isNotEmpty) ...[

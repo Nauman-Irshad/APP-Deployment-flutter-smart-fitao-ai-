@@ -8,6 +8,7 @@ import '../Order-Tracking-System/services/app_backend.dart';
 import 'chat.dart';
 import '../core/navigation/app_navigation.dart';
 import 'auth-login-sign/auth_storage.dart';
+import 'privacy_legal_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -333,6 +334,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _actionButton(context, "Your Measurements", Icons.straighten, Color(0xFF059669), () { 
                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Measurement Screen Coming Soon')));
                 }),
+                SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Privacy & Legal',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Terms, privacy policy, and how we protect your data',
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _actionButton(
+                  context,
+                  "Privacy & Security",
+                  Icons.shield_outlined,
+                  const Color(0xFF1565C0),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyLegalScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _actionButton(
+                  context,
+                  "Privacy Policy",
+                  Icons.privacy_tip_outlined,
+                  const Color(0xFF5D4037),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyLegalScreen(
+                          initialSection: PrivacyLegalSection.privacy,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _actionButton(
+                  context,
+                  "Terms of Service",
+                  Icons.gavel_outlined,
+                  const Color(0xFF455A64),
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyLegalScreen(
+                          initialSection: PrivacyLegalSection.terms,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
             GestureDetector(

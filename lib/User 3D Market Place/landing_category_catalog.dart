@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/marketplace_badge_service.dart';
 import 'category_products_page.dart';
 import 'landing_catalog_store.dart';
 import 'landing_hero_3d.dart';
@@ -104,14 +105,8 @@ class _CategorySection extends StatelessWidget {
           children: [
             Expanded(child: _SectionHeading(title: title)),
             TextButton(
-              onPressed: () => openCategoryPage(context, title),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('See more', style: TextStyle(color: MarketplaceTheme.primary)),
-                  Icon(Icons.chevron_right, color: MarketplaceTheme.primary, size: 18),
-                ],
-              ),
+              onPressed: () => _openSeeMore(context, title),
+              child: _SeeMoreLabel(sectionTitle: title),
             ),
           ],
         ),
@@ -141,6 +136,66 @@ class _CategorySection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+void _openSeeMore(BuildContext context, String sectionTitle) {
+  openCategoryPage(context, sectionTitle);
+}
+
+class _SeeMoreLabel extends StatelessWidget {
+  const _SeeMoreLabel({required this.sectionTitle});
+
+  final String sectionTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        MarketplaceBadgeService.instance,
+        LandingCatalogStore.instance,
+      ]),
+      builder: (context, _) {
+        final newCount = MarketplaceBadgeService.instance.newProducts;
+        final sellerHere =
+            LandingCatalogStore.instance.sellerListingCountForSection(sectionTitle);
+        final showBadge = sectionTitle != 'Fabric' && (newCount > 0 || sellerHere > 0);
+        final badgeValue = newCount > 0 ? newCount : sellerHere;
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'See more',
+              style: TextStyle(color: MarketplaceTheme.primary),
+            ),
+            if (showBadge) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  badgeValue > 9 ? '9+' : '$badgeValue',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+            const Icon(
+              Icons.chevron_right,
+              color: MarketplaceTheme.primary,
+              size: 18,
+            ),
+          ],
+        );
+      },
     );
   }
 }
