@@ -35,6 +35,12 @@ bool productHasRemoteGlbUrl(Map<String, dynamic> product) {
   return _isRemoteGlbUrl(modelSrcForProduct(product));
 }
 
+bool isFirebaseStorageGlbUrl(String url) {
+  final lower = url.toLowerCase();
+  return lower.contains('firebasestorage.googleapis.com') ||
+      lower.contains('firebasestorage.app');
+}
+
 bool _isRemoteGlbUrl(String src) {
   if (src.isEmpty) return false;
   final uri = Uri.tryParse(src);
@@ -144,9 +150,24 @@ String landingAssetSrc(String? assetPathRaw) {
 
 String viewerAssetSrc(String? modelPathRaw) => landingAssetSrc(modelPathRaw);
 
+String? _productModelPathRaw(Map<String, dynamic> product) {
+  for (final key in ['modelPath', 'modelUrl', 'modelDirectUrl']) {
+    final v = product[key]?.toString().trim() ?? '';
+    if (v.isNotEmpty) return v;
+  }
+  final details = product['details'];
+  if (details is Map) {
+    for (final key in ['modelPath', 'modelUrl', 'modelDirectUrl']) {
+      final v = details[key]?.toString().trim() ?? '';
+      if (v.isNotEmpty) return v;
+    }
+  }
+  return null;
+}
+
 String modelSrcForProduct(Map<String, dynamic> product) {
-  final path = product['modelPath']?.toString().trim() ?? '';
-  if (path.isEmpty) return '';
+  final path = _productModelPathRaw(product);
+  if (path == null || path.isEmpty) return '';
   return landingAssetSrc(path);
 }
 

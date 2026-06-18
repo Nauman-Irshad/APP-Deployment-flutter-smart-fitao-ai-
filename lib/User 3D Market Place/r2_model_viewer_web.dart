@@ -3,7 +3,14 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
+import 'viewer_asset_src.dart';
+
 final Set<String> _registeredViewTypes = <String>{};
+
+bool _skipCrossOrigin(String src) {
+  if (src.startsWith('blob:')) return true;
+  return isFirebaseStorageGlbUrl(src);
+}
 
 /// Web: DOM [model-viewer] with crossorigin before src (innerHTML scripts do not run).
 Widget buildR2ModelViewer({
@@ -37,7 +44,9 @@ Widget buildR2ModelViewer({
 
       mv.setAttribute('shadow-intensity', '0');
       mv.setAttribute('environment-image', 'neutral');
-      mv.setAttribute('crossorigin', 'anonymous');
+      if (!_skipCrossOrigin(src)) {
+        mv.setAttribute('crossorigin', 'anonymous');
+      }
       mv.setAttribute('alt', alt);
       final eager = staggerIndex == 0;
       mv.setAttribute('loading', eager ? 'eager' : 'lazy');

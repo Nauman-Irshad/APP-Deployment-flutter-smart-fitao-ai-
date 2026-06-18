@@ -525,7 +525,7 @@ class _LandingGridThumbnail extends StatelessWidget {
         ),
       );
     }
-    // Stitched outfits: R2 GLB only (no PNG poster). Fabric keeps imagePath above.
+    // Stitched outfits: GLB 3D preview (Firebase / R2).
     if (productHasRemoteGlbUrl(product)) {
       final src = modelSrcForProduct(product);
       if (src.isNotEmpty) {
@@ -604,6 +604,18 @@ class _Preview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (show3dPreview && productHasRemoteGlbUrl(product)) {
+      final src = modelSrcForProduct(product);
+      if (src.isNotEmpty) {
+        return ProductModelPreview(
+          src: src,
+          alt: title,
+          compact: compact,
+          staggerIndex: staggerIndex,
+        );
+      }
+    }
+
     final imagePath = product['imagePath']?.toString();
     if (imagePath != null && imagePath.isNotEmpty) {
       return ColoredBox(

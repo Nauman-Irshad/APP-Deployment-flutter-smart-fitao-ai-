@@ -16,7 +16,7 @@ class GlbUrlValidator {
     final key = url.trim();
     if (key.isEmpty) return false;
     // Firebase Storage GLBs work in model-viewer; HEAD often returns 403.
-    if (_isFirebaseStorageUrl(key)) {
+    if (isFirebaseStorageGlbUrl(key)) {
       _cache[key] = true;
       return true;
     }
@@ -35,12 +35,6 @@ class GlbUrlValidator {
         _inFlight.remove(key);
       }
     });
-  }
-
-  static bool _isFirebaseStorageUrl(String url) {
-    final lower = url.toLowerCase();
-    return lower.contains('firebasestorage.googleapis.com') ||
-        lower.contains('firebasestorage.app');
   }
 
   static Future<bool> _probe(String url) async {
