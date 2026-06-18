@@ -43,8 +43,10 @@ class FirebaseMediaUploadService {
     onProgress?.call('Uploading 3D model to cloud…');
     final glbBytes = await _readFileBytes(glb);
     final glbName = _baseName(glb.name);
+    // Flat path: seller-products/{uid}/{file} — matches Storage rules (video uses same depth).
+    final storageName = '${productKey}_$glbName';
     final modelRef = FirebaseStorage.instance.ref().child(
-      'seller-products/$sellerId/$productKey/$glbName',
+      'seller-products/$sellerId/$storageName',
     );
     await modelRef.putData(
       glbBytes,
@@ -57,8 +59,9 @@ class FirebaseMediaUploadService {
       onProgress?.call('Uploading preview image…');
       final imgBytes = await _readFileBytes(image);
       final imgName = _baseName(image.name);
+      final imgStorageName = '${productKey}_$imgName';
       final imgRef = FirebaseStorage.instance.ref().child(
-        'seller-products/$sellerId/$productKey/$imgName',
+        'seller-products/$sellerId/$imgStorageName',
       );
       final ext = imgName.split('.').last.toLowerCase();
       final mime = ext == 'png'
