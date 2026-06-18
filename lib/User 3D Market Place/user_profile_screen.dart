@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'auth-login-sign/auth_flow.dart';
+import '../core/navigation/app_navigation.dart';
 import 'auth-login-sign/auth_storage.dart';
 
 class UserProfileScreen extends StatelessWidget {
@@ -311,73 +311,39 @@ class UserProfileScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      'Join as a tailor or seller and start your business',
+                      'Join as a tailor and start your business',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
                         fontSize: 14,
                       ),
                     ),
                     SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.content_cut, color: Colors.white, size: 24),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Become a Tailor',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
+                    Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.content_cut, color: Colors.white, size: 24),
+                              SizedBox(width: 12),
+                              Text(
+                                'Become a Tailor',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.store, color: Colors.white, size: 24),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Become a Seller',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                Icon(Icons.arrow_forward, color: Colors.white, size: 20),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                          Icon(Icons.arrow_forward, color: Colors.white, size: 20),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -429,14 +395,7 @@ class UserProfileScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  await AuthStorage.clearAllData();
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => AuthFlow()),
-                    (route) => false,
-                  );
-                },
+                  onPressed: () => AppNavigation.logoutToRolePicker(context),
                   icon: Icon(Icons.logout),
                   label: Text('Logout'),
                   style: ElevatedButton.styleFrom(

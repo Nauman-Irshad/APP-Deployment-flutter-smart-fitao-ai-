@@ -5,6 +5,7 @@ import 'fabric_product_screen.dart';
 import 'size prediction model/live_measurement.dart';
 import 'standard_sizes.dart';
 import 'marketplace_pkr.dart';
+import '../services/marketplace_demo_seller.dart';
 import 'seller_profile_screen.dart';
 import 'chat.dart';
 import 'viewer_asset_src.dart';
@@ -394,37 +395,26 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
                         SizedBox(height: 14),
                         // Seller – tap to open seller profile (Firestore-backed when sellerId is set)
                         GestureDetector(
-                          onTap: () {
-                            final sid = widget.product['sellerId']?.toString();
-                            final sName = widget.product['sellerName']?.toString() ?? 'Seller';
-                            final sAddr = widget.product['sellerAddress']?.toString() ?? '';
+                          onTap: () async {
+                            final seller = await MarketplaceDemoSeller.resolve();
+                            final stamped =
+                                MarketplaceDemoSeller.attach(widget.product, seller);
+                            if (!context.mounted) return;
+                            final sName = stamped['sellerName']?.toString() ?? 'Seller';
+                            final sAddr = stamped['sellerAddress']?.toString() ?? '';
                             final img = widget.product['imageUrl']?.toString();
-                            if (sid != null && sid.isNotEmpty) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => SellerProfileScreen(
-                                    sellerName: sName,
-                                    sellerAddress: sAddr,
-                                    shopImageUrl: img != null && img.isNotEmpty ? img : null,
-                                    firebaseSellerId: sid,
-                                    products: const [],
-                                  ),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => SellerProfileScreen(
+                                  sellerName: sName,
+                                  sellerAddress: sAddr,
+                                  shopImageUrl: img != null && img.isNotEmpty ? img : null,
+                                  firebaseSellerId: seller.uid,
+                                  products: const [],
                                 ),
-                              );
-                            } else {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute<void>(
-                                  builder: (_) => SellerProfileScreen(
-                                    sellerName: 'SmartFitao Store',
-                                    sellerAddress: '45 E1, near Lacas School, Johar Town, Lahore',
-                                    shopImagePath: 'assets/banner 1.png',
-                                    products: List<Map<String, dynamic>>.from(_sellerProducts),
-                                  ),
-                                ),
-                              );
-                            }
+                              ),
+                            );
                           },
                           child: Container(
                             padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -463,16 +453,19 @@ class _ProductViewerScreenState extends State<ProductViewerScreen> {
                                 ),
                                 IconButton(
                                   icon: Icon(Icons.message_outlined, color: Color(0xFF22c55e), size: 22),
-                                  onPressed: () {
-                                    final sid = widget.product['sellerId']?.toString();
-                                    final sName = widget.product['sellerName']?.toString() ?? 'Seller';
+                                  onPressed: () async {
+                                    final seller = await MarketplaceDemoSeller.resolve();
+                                    final stamped =
+                                        MarketplaceDemoSeller.attach(widget.product, seller);
+                                    if (!context.mounted) return;
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute<void>(
                                         builder: (_) => ChatScreen(
-                                          initialChatName: sName,
+                                          initialChatName:
+                                              stamped['sellerName']?.toString() ?? 'Seller',
                                           initialChatType: 'Seller',
-                                          initialPeerId: sid,
+                                          initialPeerId: seller.uid,
                                         ),
                                       ),
                                     );

@@ -7,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../Order-Tracking-System/services/app_backend.dart';
 import '../../../Order-Tracking-System/tracking.dart' show OrderType;
-import '../3d_marketplace.dart';
 import 'cloth_measurement_models.dart';
 import 'cloth_measurement_wizard_panel.dart';
 import 'cloth_studio_bridge.dart';
@@ -15,7 +14,12 @@ import 'studio_opener.dart';
 import '../../../2d_try_on_app/try_on_screen.dart';
 import '../../../2d_try_on_app/try_on_find_tailor_screen.dart';
 import '../../../2d_try_on_app/try_on_order_session.dart';
+import '../../../payments/demo_order_placement.dart';
+import '../../../payments/stripe_payment_service.dart';
+import '../../../payments/stripe_pending_checkout.dart';
 import '../../../services/customer_fitting_store.dart';
+import '../../../services/tailor_chat_service.dart';
+import '../../../config/demo_accounts.dart';
 
 class LiveMeasurementScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -49,6 +53,7 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
   /// Shipping address shown on the final review (typed field or profile fallback).
   String _reviewDeliveryAddress = '';
   bool _placingOrder = false;
+  bool _payingStripe = false;
 
   Future<List<AppUserProfile>> _loadTailorsOnce() {
     return _tailorsFuture ??= AppBackend.instance.fetchAvailableTailors();
@@ -56,12 +61,28 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
 
   final Map<String, TextEditingController> _measurementControllers = {};
   final TextEditingController _chatController = TextEditingController();
-  
-  List<Map<String, dynamic>> _chatMessages = [
-    {'text': 'Hi! I saw your measurements. I can complete this in 4 days.', 'isMe': false, 'type': 'text'},
-    {'text': 'The fee will be \$35.0. Is that okay?', 'isMe': false, 'type': 'text'},
-    {'text': 'Yes, sounds perfect. Please use the measurements I shared.', 'isMe': true, 'type': 'text'},
-  ];
+
+  String? get _activeChatId {
+    final tailor = _selectedTailorProfile;
+    final user = FirebaseAuth.instance.currentUser;
+    if (tailor == null || user == null) return null;
+    return TailorChatService.chatId(
+      tailorId: tailor.uid,
+      customerId: user.uid,
+    );
+  }
+
+  Future<String> _customerDisplayName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return DemoAccounts.customerName;
+    try {
+      final p = await AppBackend.instance.getUserProfile(user.uid);
+      if (p.name.trim().isNotEmpty) return p.name.trim();
+    } catch (_) {}
+    return user.displayName?.trim().isNotEmpty == true
+        ? user.displayName!.trim()
+        : DemoAccounts.customerName;
+  }
 
   @override
   void initState() {
@@ -513,15 +534,17 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () async {
-                            setState(() => _selectedTailorProfile = t);
-                            await _placeCustomOrder();
+                          onPressed: () {
+                            setState(() {
+                              _selectedTailorProfile = t;
+                              _step = 'checkout';
+                            });
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Color(0xFF059669),
                             foregroundColor: Colors.white,
                           ),
-                          child: Text('Order'),
+                          child: Text('Checkout'),
                         ),
                       ),
                     ],
@@ -578,14 +601,47 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
             ),
           ),
           Expanded(
-            child: ListView.builder(
-              padding: EdgeInsets.all(16),
-              itemCount: _chatMessages.length,
-              itemBuilder: (context, index) {
-                final msg = _chatMessages[index];
-                return _buildChatMessage(msg['text'], msg['isMe'], type: msg['type'] ?? 'text');
-              },
-            ),
+            child: _activeChatId == null
+                ? const Center(
+                    child: Text(
+                      'Select a tailor to start chatting.',
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                  )
+                : StreamBuilder<List<TailorChatMessage>>(
+                    stream: TailorChatService.watchMessages(_activeChatId!),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final messages = snap.data ?? [];
+                      if (messages.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'Message your tailor about measurements or fabric.\nThey will see it in Messages.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.black54),
+                          ),
+                        );
+                      }
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = messages[index];
+                          final isMe = msg.sender == 'customer';
+                          final text = msg.type == 'product' && msg.productTitle != null
+                              ? msg.productTitle!
+                              : msg.text;
+                          return _buildChatMessage(
+                            text,
+                            isMe,
+                            type: msg.type,
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
           Padding(
             padding: EdgeInsets.all(16),
@@ -896,27 +952,55 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _placingOrder ? null : _placeCustomOrder,
+          child: OutlinedButton.icon(
+            onPressed: (_placingOrder || _payingStripe) ? null : _placeDemoOrder,
+            icon: _placingOrder
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_circle_outline),
+            label: const Text(
+              'Order Place Demo',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFb45309),
+              side: const BorderSide(color: Color(0xFFd97706), width: 1.5),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: (_placingOrder || _payingStripe) ? null : _payWithStripe,
+            icon: _payingStripe
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.lock),
+            label: const Text(
+              'Pay with Stripe',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF059669),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            child: _placingOrder
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Text('Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ),
         const SizedBox(height: 8),
         Center(
           child: TextButton(
-            onPressed: _placingOrder ? null : () => setState(() => _step = 'checkout'),
+            onPressed: (_placingOrder || _payingStripe) ? null : () => setState(() => _step = 'checkout'),
             child: const Text('Back', style: TextStyle(color: Colors.grey)),
           ),
         ),
@@ -924,19 +1008,173 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
     );
   }
 
-  void _sendMessage({String? text, String? type}) {
+  Map<String, dynamic> _liveOrderDetails() {
+    final measurements = <String, String>{};
+    _measurementControllers.forEach((key, controller) {
+      measurements[key] = controller.text;
+    });
+    return <String, dynamic>{
+      'clothSizeChart': measurements,
+      'flow': 'live_measurement',
+      ...Map<String, dynamic>.from(
+        (widget.product['details'] is Map)
+            ? Map<String, dynamic>.from(widget.product['details'] as Map)
+            : {},
+      ),
+    };
+  }
+
+  Future<void> _placeDemoOrder() async {
+    if (_placingOrder) return;
+    final tailor = _selectedTailorProfile;
+    if (tailor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a tailor first')),
+      );
+      return;
+    }
+
+    final unitPrice = double.tryParse(widget.product['price'].toString()) ?? 0.0;
+    const quantity = 1;
+    final tailorStitchingTotal = tailor.stitchingRate * quantity;
+    final tailorProfitTotal = tailor.tailorProfitPerUnit * quantity;
+
+    setState(() => _placingOrder = true);
+    try {
+      await DemoOrderPlacement.placeAndGoHome(
+        context: context,
+        product: widget.product,
+        orderType: OrderType.custom,
+        details: _liveOrderDetails(),
+        quantity: quantity,
+        unitPrice: unitPrice,
+        tailor: tailor,
+        deliveryAddress: _reviewDeliveryAddress,
+        tailorStitchingTotal: tailorStitchingTotal,
+        precomputedTailorProfitTotal: tailorProfitTotal,
+      );
+    } finally {
+      if (mounted) setState(() => _placingOrder = false);
+    }
+  }
+
+  Future<void> _payWithStripe() async {
+    if (_payingStripe) return;
+    final tailor = _selectedTailorProfile;
+    if (tailor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a tailor first')),
+      );
+      return;
+    }
+
+    final productPrice = double.tryParse(widget.product['price'].toString()) ?? 0.0;
+    const quantity = 1;
+    final tailorStitchingTotal = tailor.stitchingRate * quantity;
+    final totalPkr = (productPrice + tailorStitchingTotal).round();
+    if (totalPkr < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order total must be greater than zero')),
+      );
+      return;
+    }
+
+    final productTitle = widget.product['title']?.toString() ?? 'Product';
+    final tailorLabel =
+        tailor.shopName.isNotEmpty ? tailor.shopName : tailor.name;
+
+    setState(() => _payingStripe = true);
+    try {
+      await StripePaymentService.startCheckout(
+        amountPkr: totalPkr,
+        productName: productTitle,
+        description:
+            'Live measurement · $productTitle · Tailor $tailorLabel · PKR $totalPkr',
+        pending: StripePendingCheckout(
+          userId: FirebaseAuth.instance.currentUser?.uid ??
+              'live_${DateTime.now().millisecondsSinceEpoch}',
+          productId: widget.product['firebaseProductId']?.toString() ??
+              widget.product['id']?.toString() ??
+              'live_product',
+          productTitle: '$productTitle + $tailorLabel',
+          quantity: quantity,
+          unitPrice: productPrice,
+          totalPkr: totalPkr,
+          category: 'LiveMeasurement+Tailor',
+          productImage: widget.product['imageUrl']?.toString() ?? '',
+          address: _reviewDeliveryAddress,
+          reducedPrice: totalPkr.toDouble(),
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Complete payment on Stripe checkout (test card 4242…)'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _payingStripe = false);
+    }
+  }
+
+  Future<void> _sendMessage({String? text, String? type}) async {
     final content = text ?? _chatController.text.trim();
     if (content.isEmpty) return;
-    
-    setState(() {
-      _chatMessages.add({
-        'text': content,
-        'isMe': true,
-        'type': type ?? 'text',
-      });
-    });
-    
+
+    final tailor = _selectedTailorProfile;
+    final user = FirebaseAuth.instance.currentUser;
+    if (tailor == null || user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sign in and select a tailor to chat')),
+        );
+      }
+      return;
+    }
+
     _chatController.clear();
+    final customerName = await _customerDisplayName();
+    final chatId = TailorChatService.chatId(
+      tailorId: tailor.uid,
+      customerId: user.uid,
+    );
+    final tailorName =
+        tailor.shopName.isNotEmpty ? tailor.shopName : tailor.name;
+    final msgType = type ?? 'text';
+    final productTitle = widget.product['title']?.toString();
+    final priceRaw = widget.product['price'];
+    final productPrice = priceRaw is num ? priceRaw.toInt() : int.tryParse('$priceRaw');
+
+    try {
+      await TailorChatService.sendCustomerMessage(
+        chatId: chatId,
+        tailorId: tailor.uid,
+        customerId: user.uid,
+        customerName: customerName,
+        tailorName: tailorName,
+        type: msgType,
+        text: content,
+        productTitle: msgType == 'product' ? productTitle : null,
+        productPricePkr: msgType == 'product' ? productPrice : null,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not send message: $e')),
+        );
+      }
+    }
   }
 
   void _showAttachmentOptions() {
@@ -964,7 +1202,10 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     
-                    _sendMessage(text: "Shared Product: Premium Suit", type: 'product');
+                    _sendMessage(
+                      text: widget.product['title']?.toString() ?? 'Shared product',
+                      type: 'product',
+                    );
                     
                     
                   },
@@ -975,7 +1216,7 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
                   color: Color(0xFF0284c7),
                   onTap: () {
                     Navigator.pop(context);
-                    _sendMessage(text: "Shared Size Chart: Custom Fit", type: 'size_chart');
+                    _sendMessage(text: 'Shared size chart from live measurement', type: 'size_chart');
                   },
                 ),
               ],
@@ -1002,127 +1243,6 @@ class _LiveMeasurementScreenState extends State<LiveMeasurementScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _placeCustomOrder() async {
-    if (_placingOrder) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sign in to place a custom order')),
-        );
-      }
-      return;
-    }
-
-    final tailor = _selectedTailorProfile;
-    if (tailor == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Select a tailor first')),
-        );
-      }
-      return;
-    }
-
-    final productId =
-        widget.product['firebaseProductId']?.toString() ?? widget.product['id']?.toString() ?? '';
-    final sellerId = widget.product['sellerId']?.toString() ?? '';
-    if (productId.isEmpty || sellerId.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Missing product or seller — use marketplace items from a seller')),
-        );
-      }
-      return;
-    }
-
-    if (widget.product['outOfStock'] == true) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('This product is out of stock')),
-        );
-      }
-      return;
-    }
-
-    final backend = AppBackend.instance;
-    final profile = await backend.getUserProfile(user.uid);
-
-    final productName = widget.product['title']?.toString() ?? 'Product';
-    final unitPrice = double.tryParse(widget.product['price'].toString()) ?? 0.0;
-    final tailorDisplayName =
-        tailor.shopName.isNotEmpty ? '${tailor.shopName} (${tailor.name})' : tailor.name;
-    const quantity = 1;
-    final tailorStitchingTotal = tailor.stitchingRate * quantity;
-    final tailorProfitTotal = tailor.tailorProfitPerUnit * quantity;
-
-    final measurements = <String, String>{};
-    _measurementControllers.forEach((key, controller) {
-      measurements[key] = controller.text;
-    });
-
-    final details = <String, dynamic>{
-      'clothSizeChart': measurements,
-      'flow': 'live_measurement',
-      ...Map<String, dynamic>.from(
-        (widget.product['details'] is Map) ? Map<String, dynamic>.from(widget.product['details'] as Map) : {},
-      ),
-    };
-
-    final typedAddr = _addressController.text.trim();
-    final delivery = typedAddr.isNotEmpty ? typedAddr : profile.address;
-
-    setState(() => _placingOrder = true);
-    try {
-      final orderId = await backend.createOrder(
-        customerId: profile.uid,
-        customerName: profile.name,
-        productId: productId,
-        productName: productName,
-        totalAmount: unitPrice,
-        quantity: quantity,
-        type: OrderType.custom,
-        details: details,
-        sellerId: sellerId,
-        sellerName: widget.product['sellerName']?.toString() ?? '',
-        sellerAddress: widget.product['sellerAddress']?.toString() ?? '',
-        tailorId: tailor.uid,
-        tailorName: tailorDisplayName,
-        tailorAddress: tailor.address,
-        deliveryAddress: delivery,
-        tailorStitchingTotal: tailorStitchingTotal,
-        precomputedTailorProfitTotal: tailorProfitTotal,
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Order placed. ID: $orderId'),
-          backgroundColor: Color(0xFF059669),
-        ),
-      );
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(builder: (_) => const MarketPlace3D()),
-        (route) => false,
-      );
-    } catch (e, st) {
-      debugPrint('placeOrder: $e\n$st');
-      if (mounted) {
-        var msg = e is FirebaseException ? '${e.code}: ${e.message ?? e.toString()}' : e.toString();
-        if (msg.contains('converted Future') || msg.contains('boxed error')) {
-          msg =
-              'Firestore error (often invalid data or security rules). Full: $msg';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error placing order: $msg'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _placingOrder = false);
-    }
   }
 
   @override

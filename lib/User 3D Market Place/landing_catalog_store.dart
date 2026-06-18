@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
+import '../services/marketplace_demo_seller.dart';
 import 'glb_url_validator.dart';
 import 'landing_models_api.dart';
 import 'landing_page_products.dart' show kIncludeSellerListingsInMarketplace, kLandingPageProducts, kProductsPerLandingCategory;
@@ -119,15 +120,19 @@ class LandingCatalogStore extends ChangeNotifier {
       if (_firebaseSub != null) return;
 
       _firebaseSub = backend.streamAllProducts().listen(
-        (list) {
+        (list) async {
           try {
+            final seller = await MarketplaceDemoSeller.resolve();
             final maps = <Map<String, dynamic>>[];
             final b = AppBackend.instance;
             for (final p in list) {
               try {
                 if (p.isOutOfStock) continue;
                 if (!p.showOnLanding) continue;
-                final m = b.marketplaceProductMap(p);
+                final m = MarketplaceDemoSeller.attach(
+                  b.marketplaceProductMap(p),
+                  seller,
+                );
                 m['isSellerListing'] = true;
                 maps.add(m);
               } catch (e, st) {
@@ -169,6 +174,15 @@ class LandingCatalogStore extends ChangeNotifier {
     } catch (e, st) {
       debugPrint('LandingCatalogStore.ensureLoaded: $e\n$st');
       _bundled = _defaultBundled();
+    }
+    try {
+      final seller = await MarketplaceDemoSeller.resolve();
+      MarketplaceDemoSeller.cache(seller);
+      _bundled = _bundled
+          .map((p) => MarketplaceDemoSeller.attach(p, seller))
+          .toList();
+    } catch (e, st) {
+      debugPrint('LandingCatalogStore demo seller stamp: $e\n$st');
     }
     await _validateGlbLinks();
     notifyListeners();

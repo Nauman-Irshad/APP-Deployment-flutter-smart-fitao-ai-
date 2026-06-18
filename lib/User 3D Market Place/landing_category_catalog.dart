@@ -6,17 +6,13 @@ import 'landing_hero_3d.dart';
 import 'marketplace_theme.dart';
 import 'viewer_asset_src.dart';
 
-/// Landing preview: category slider + 3 sections (4 each) + action buttons.
+/// Landing preview: category slider + 3 sections (4 each).
 class LandingCategoryCatalog extends StatefulWidget {
   const LandingCategoryCatalog({
     super.key,
-    required this.onFindTailor,
-    required this.onBecomeSeller,
     required this.screenWidth,
   });
 
-  final VoidCallback onFindTailor;
-  final VoidCallback onBecomeSeller;
   final double screenWidth;
 
   @override
@@ -78,27 +74,6 @@ class _LandingCategoryCatalogState extends State<LandingCategoryCatalog> {
                 title: 'Fabric',
                 products: landingProductsForSection('Fabric'),
                 columns: _gridColumns,
-              ),
-              const SizedBox(height: 28),
-              _ActionBanner(
-                title: 'Find Your Perfect Tailor',
-                subtitle:
-                    'Connect with expert tailors for custom stitching & perfect fit.',
-                gradient: const [MarketplaceTheme.primaryDark, MarketplaceTheme.primary],
-                icon: Icons.arrow_forward,
-                iconBg: Colors.white,
-                iconColor: MarketplaceTheme.primaryDark,
-                onTap: widget.onFindTailor,
-              ),
-              const SizedBox(height: 12),
-              _ActionBanner(
-                title: 'Become a Seller',
-                subtitle: 'Login as a seller to manage products and sales.',
-                gradient: const [Color(0xFF1F2937), Color(0xFF374151)],
-                icon: Icons.store,
-                iconBg: Colors.white,
-                iconColor: Color(0xFF1F2937),
-                onTap: widget.onBecomeSeller,
               ),
               const SizedBox(height: 16),
             ],
@@ -166,87 +141,6 @@ class _CategorySection extends StatelessWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-class _ActionBanner extends StatelessWidget {
-  const _ActionBanner({
-    required this.title,
-    required this.subtitle,
-    required this.gradient,
-    required this.icon,
-    required this.iconBg,
-    required this.iconColor,
-    required this.onTap,
-  });
-
-  final String title;
-  final String subtitle;
-  final List<Color> gradient;
-  final IconData icon;
-  final Color iconBg;
-  final Color iconColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: gradient,
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: Colors.grey.shade300,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-                child: Icon(icon, color: iconColor),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

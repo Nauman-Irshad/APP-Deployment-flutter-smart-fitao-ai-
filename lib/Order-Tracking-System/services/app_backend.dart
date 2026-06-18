@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../tracking.dart' as tracking;
 
+/// Default tailor margin per order unit (PKR) when not set on profile / order.
+const double kDefaultTailorProfitPerUnit = 500;
+
 class AppUserProfile {
   final String uid;
   final String name;
@@ -236,6 +239,7 @@ class AppBackend {
     String address = '',
     bool available = false,
     double stitchingRate = 0,
+    double tailorProfitPerUnit = kDefaultTailorProfitPerUnit,
   }) async {
     await _db.collection('users').doc(uid).set({
       'email': email.trim().toLowerCase(),
@@ -244,7 +248,10 @@ class AppBackend {
       'shopName': shopName,
       'address': address,
       'available': available,
-      if (role == 'tailor') 'stitchingRate': stitchingRate,
+      if (role == 'tailor') ...{
+        'stitchingRate': stitchingRate,
+        'tailorProfitPerUnit': tailorProfitPerUnit,
+      },
       'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -712,8 +719,13 @@ class AppBackend {
 
   double _tailorLineProfit(Map<String, dynamic> data) {
     final p = data['tailorProfitTotal'];
-    if (p is num) return p.toDouble();
-    return 0.0;
+    if (p is num && p > 0) return p.toDouble();
+    final qty = (data['quantity'] as num? ?? 1).toInt();
+    final perUnit = data['tailorProfitPerUnit'];
+    if (perUnit is num && perUnit > 0) {
+      return perUnit.toDouble() * qty;
+    }
+    return kDefaultTailorProfitPerUnit * qty;
   }
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -785,22 +797,45 @@ class AppBackend {
       final created = _toDateTime(data['createdAt']);
       if (created == null) continue;
 
+      // Seller income counts only after "Confirm Payment" (payment released).
+      final released = _toDateTime(data['sellerPaymentReleasedAt']);
+      if (released == null) {
+        final st = _asString(data['status']).isEmpty ? 'withSeller' : _asString(data['status']);
+        final stLower = st.toLowerCase();
+        if (stLower == 'cancelled') {
+          statusCounts['cancelled'] = (statusCounts['cancelled'] ?? 0) + 1;
+        } else if (st == 'pending' || st == 'withSeller') {
+          statusCounts['pending'] = (statusCounts['pending'] ?? 0) + 1;
+        } else if (st == 'delivered' || st == 'paymentReceived') {
+          statusCounts['completed'] = (statusCounts['completed'] ?? 0) + 1;
+        } else if (st == 'shipped' ||
+            st == 'shippedToTailor' ||
+            st == 'tailorDelivered' ||
+            st == 'tailorStitched' ||
+            st == 'tailorToShip') {
+          statusCounts['shipped'] = (statusCounts['shipped'] ?? 0) + 1;
+        } else {
+          statusCounts['other'] = (statusCounts['other'] ?? 0) + 1;
+        }
+        continue;
+      }
+
       final sales = _orderLineSales(data);
       final profit = _orderLineProfit(data);
 
-      final di = dayBucket(created);
+      final di = dayBucket(released);
       if (di != null && di >= 0 && di < 7) {
         salesBuckets['Day']![di] += sales;
         profitBuckets['Day']![di] += profit;
       }
 
-      final wi = weekBucket(created);
+      final wi = weekBucket(released);
       if (wi != null && wi >= 0 && wi < 7) {
         salesBuckets['Week']![wi] += sales;
         profitBuckets['Week']![wi] += profit;
       }
 
-      final mi = monthBucket(created);
+      final mi = monthBucket(released);
       if (mi != null && mi >= 0 && mi < 7) {
         salesBuckets['Month']![mi] += sales;
         profitBuckets['Month']![mi] += profit;
@@ -925,24 +960,23 @@ class AppBackend {
     for (final doc in docs) {
       final data = doc.data();
       final created = _toDateTime(data['createdAt']);
+      final stitch = _tailorLineSales(data);
       if (created != null) {
         addCount(ordTotal, created, 1);
       }
 
-      final released = _toDateTime(data['tailorPaymentReleasedAt']);
-      if (released != null) {
-        addCount(ordDone, released, 1);
-
-        final sales = _tailorLineSales(data);
+      // Earnings per order: stitching fee (sales) + PKR 500 profit per unit.
+      if (stitch > 0 && created != null) {
+        final sales = stitch;
         final profit = _tailorLineProfit(data);
         for (final per in periods) {
           int? idx;
           if (per == 'Day') {
-            idx = dayBucket(released);
+            idx = dayBucket(created);
           } else if (per == 'Week') {
-            idx = weekBucket(released);
+            idx = weekBucket(created);
           } else {
-            idx = monthBucket(released);
+            idx = monthBucket(created);
           }
           if (idx != null && idx >= 0 && idx < 7) {
             earnSales[per]![idx] += sales;
@@ -956,6 +990,11 @@ class AppBackend {
         productAgg.putIfAbsent(aggKey, () => _ProductAgg(name));
         productAgg[aggKey]!.orderCount += 1;
         productAgg[aggKey]!.sales += sales;
+      }
+
+      final released = _toDateTime(data['tailorPaymentReleasedAt']);
+      if (released != null) {
+        addCount(ordDone, released, 1);
       }
     }
 
@@ -1159,6 +1198,7 @@ class AppBackend {
     String? tailorName,
     String tailorAddress = '',
     String deliveryAddress = '',
+    String? customerEmail,
     double tailorStitchingTotal = 0,
     /// Set from [AppUserProfile.tailorProfitPerUnit] * quantity — do not read `users/{tailorId}` in a transaction (often denied for buyers on web).
     double precomputedTailorProfitTotal = 0,
@@ -1173,6 +1213,8 @@ class AppBackend {
     final payload = <String, dynamic>{
       'customerId': customerId,
       'customerName': customerName,
+      if (customerEmail != null && customerEmail.isNotEmpty)
+        'customerEmail': customerEmail,
       'productId': productId,
       'productName': productName,
       'sellerId': sellerId,
@@ -1218,9 +1260,15 @@ class AppBackend {
         'stockQuantity': newStock,
         if (newStock <= 0) 'isOutOfStock': true,
       });
+    } else {
+      // Bundled 3D marketplace SKU (lp_*) — default margin for seller dashboard.
+      profitPerUnit = (totalAmount * 0.12).clamp(0.0, 1e12);
     }
 
-    final tailorProfitTotal = precomputedTailorProfitTotal.clamp(0.0, 1e12);
+    final tailorProfitTotal = (precomputedTailorProfitTotal > 0
+            ? precomputedTailorProfitTotal
+            : kDefaultTailorProfitPerUnit * quantity)
+        .clamp(0.0, 1e12);
     final productLineTotal = totalAmount * quantity;
     final sellerProfitTotal = profitPerUnit * quantity;
     final customerGrandTotal = productLineTotal + tailorStitchingTotal;

@@ -78,9 +78,16 @@ class _InboxTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final preview = item.lastMessage.isNotEmpty
         ? item.lastMessage
-        : 'Open chat';
+        : 'Tap to open chat';
+    final whatsAppLine = item.lastMessage.isNotEmpty
+        ? '${item.customerName}: $preview'
+        : item.customerName;
+    final hasUnread = item.unreadForTailor > 0;
+
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        await TailorChatService.markChatReadForTailor(item.chatId);
+        if (!context.mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -97,8 +104,11 @@ class _InboxTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: hasUnread ? const Color(0xFFE8F5E9) : Colors.white,
           borderRadius: BorderRadius.circular(12),
+          border: hasUnread
+              ? Border.all(color: const Color(0xFF059669).withValues(alpha: 0.35))
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
@@ -126,26 +136,56 @@ class _InboxTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item.customerName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.customerName,
+                          style: TextStyle(
+                            fontWeight: hasUnread ? FontWeight.w800 : FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      if (hasUnread)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            item.unreadForTailor > 9 ? '9+' : '${item.unreadForTailor}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    preview,
+                    whatsAppLine,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    style: TextStyle(
+                      color: hasUnread ? Colors.black87 : Colors.grey[600],
+                      fontSize: 14,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                    ),
                   ),
                 ],
               ),
             ),
             Text(
               _formatTime(item.updatedAt),
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              style: TextStyle(
+                color: hasUnread ? const Color(0xFF059669) : Colors.grey[500],
+                fontSize: 12,
+                fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -186,6 +226,12 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    TailorChatService.markChatReadForTailor(widget.chatId);
+  }
 
   @override
   void dispose() {

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Fitao AI</title>
+  <link rel="preconnect" href="https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev" crossorigin>
   <link rel="stylesheet" href="css/style.css?v=10" />
   <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
   <script src="chat-engine.js?v=2"></script>
@@ -208,8 +209,8 @@
       viewer.setAttribute('alt', alt || '3D product');
       viewer.setAttribute('auto-rotate', '');
       viewer.setAttribute('camera-controls', '');
-      viewer.setAttribute('shadow-intensity', '1');
-      viewer.setAttribute('loading', 'eager');
+      viewer.setAttribute('shadow-intensity', '0');
+      viewer.setAttribute('loading', 'lazy');
       viewer.setAttribute('reveal', 'auto');
       viewer.setAttribute('touch-action', 'pan-y');
       viewer.setAttribute('crossorigin', 'anonymous');
@@ -587,6 +588,16 @@
       });
     }
 
+    function isMobileEmbed() {
+      try {
+        var p = new URLSearchParams(window.location.search || '');
+        if (p.get('mobile') === '1' || p.get('embed') === '1') return true;
+        return window.innerWidth > 0 && window.innerWidth < 900;
+      } catch (e) {
+        return true;
+      }
+    }
+
     function sendQuestion(q) {
       q = (q || questionEl.value.trim()).trim();
       if (!q) return;
@@ -598,16 +609,14 @@
       appendUserBubble(q);
       appendBotLoadingRow();
 
-      askRemoteApi(q)
-        .then(function(result) {
-          if (result && result.ok && result.data && result.data.answer) return result;
-          return askLocalNlp(q).then(function(local) {
-            return local;
-          });
-        })
-        .catch(function() {
-          return askLocalNlp(q);
-        })
+      var chatPromise = isMobileEmbed()
+        ? askLocalNlp(q).catch(function() { return askRemoteApi(q); })
+        : askRemoteApi(q).then(function(result) {
+            if (result && result.ok && result.data && result.data.answer) return result;
+            return askLocalNlp(q);
+          }).catch(function() { return askLocalNlp(q); });
+
+      chatPromise
         .then(function(result) {
           removeBotLoadingRow(true);
           setTimeout(function() {

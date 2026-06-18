@@ -59,6 +59,7 @@ class _CustomerPeerChatScreenState extends State<CustomerPeerChatScreen> {
         customerName: _customerName,
         tailorName: widget.peerName,
       );
+      await TailorChatService.markChatReadForCustomer(_chatId!);
     } else {
       await SellerChatService.ensureChat(
         chatId: _chatId!,
@@ -69,6 +70,7 @@ class _CustomerPeerChatScreenState extends State<CustomerPeerChatScreen> {
             ? widget.peerShopName
             : widget.peerName,
       );
+      await SellerChatService.markChatReadForCustomer(_chatId!);
     }
     if (mounted) setState(() => _ready = true);
   }

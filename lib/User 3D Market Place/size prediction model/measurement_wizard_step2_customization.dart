@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cloth_measurement_models.dart';
+import 'cloth_prediction_service.dart';
 import 'cloth_wizard_layout.dart';
 
 typedef ClothStep2Complete = Future<void> Function(ClothWizardBodyPrefs data);
@@ -64,6 +65,7 @@ class _MeasurementWizardStep2CustomizationState
   @override
   void initState() {
     super.initState();
+    ClothPredictionService.instance.warmApiInBackground();
     final i = widget.initialValues;
     _bodyType = i?.bodyType ?? 'Athletic';
     _collarFit = i?.collarFit ?? 'Loose';

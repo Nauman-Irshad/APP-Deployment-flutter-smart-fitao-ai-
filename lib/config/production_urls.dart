@@ -36,15 +36,31 @@ class ProductionUrls {
       '$mediaCdn/landing%20page%20product/shalwar/navy%20kurta%203d%20model.glb';
 
   // —— Reels on R2 (online only) ——
+  /// Desktop / Wi‑Fi — full quality.
   static const String reel1 =
       '$mediaCdn/reels/6767035-uhd_2160_3840_25fps.mp4';
+  /// Mobile — upload 720p files to R2 `reels/mobile/` (see CLOUDFLARE-MEDIA-UPLOAD.md).
+  static const String reel1Mobile =
+      '$mediaCdn/reels/mobile/tailor-showcase-720p.mp4';
+  static const String reel2Mobile =
+      '$mediaCdn/reels/mobile/baju-cutting-720p.mp4';
+  static const String reel3Mobile =
+      '$mediaCdn/reels/mobile/ladies-suit-720p.mp4';
+  static const String reel4Mobile = '$mediaCdn/reels/mobile/videoplayback-720p.mp4';
+  static const String reel5Mobile =
+      '$mediaCdn/reels/mobile/trouser-cutting-720p.mp4';
+
+  static const String reel5 =
+      '$mediaCdn/reels/%F0%9F%98%8Atrouser%20cutting%20and%20%23skdarzionlinestitching%20%23viral%20fashion%20%20%23shortsfeed%20%F0%9F%91%87%20(1).mp4';
+
   static const String reel2 =
       '$mediaCdn/reels/Baju%20cutting%20mote%20ki%20gulami%20Dekhe%23tailor%20%23tailormaster%20%23darzi%20%23funnyvideo%20%23%20nice%20video%23tailor.mp4';
   static const String reel3 =
       '$mediaCdn/reels/ladies%20suit%20ka%20new%20design%20check%20Karen%20gale%20ka%23tailor%20%23funnyvideo%20%23darzi.mp4';
   static const String reel4 = '$mediaCdn/reels/videoplayback.mp4';
-  static const String reel5 =
-      '$mediaCdn/reels/%F0%9F%98%8Atrouser%20cutting%20and%20%23skdarzionlinestitching%20%23viral%20fashion%20%20%23shortsfeed%20%F0%9F%91%87%20(1).mp4';
+
+  /// Smaller reel when mobile 720p files missing on R2.
+  static const String reelMobileFallback = reel4;
 
   static String r2ObjectUrl(String objectKey) {
     final key = objectKey.trim().replaceAll('\\', '/');

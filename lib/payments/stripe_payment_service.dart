@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import 'stripe_payment_config.dart';
+import 'stripe_pending_checkout.dart';
 
 class StripeCheckoutSession {
   StripeCheckoutSession({
@@ -23,6 +24,41 @@ class StripeCheckoutSession {
 
 class StripePaymentService {
   StripePaymentService._();
+
+  static Duration get _httpTimeout {
+    final base = StripePaymentConfig.baseUrl;
+    if (base.contains('onrender.com')) {
+      return const Duration(seconds: 60);
+    }
+    return const Duration(seconds: 15);
+  }
+
+  /// Same flow as marketplace [CheckoutPage] — save pending order, Stripe session, open URL.
+  static Future<StripeCheckoutSession> startCheckout({
+    required int amountPkr,
+    required String productName,
+    required String description,
+    required StripePendingCheckout pending,
+    bool skipLiveModeProbe = false,
+  }) async {
+    await StripePendingCheckout.save(pending);
+    try {
+      if (!skipLiveModeProbe && kDebugMode) {
+        await ensureLiveCheckoutMode();
+      }
+      final session = await createCheckoutSession(
+        amountPkr: amountPkr,
+        productName: productName,
+        description: description,
+        timeout: _httpTimeout,
+      );
+      await openCheckoutUrl(session.url);
+      return session;
+    } catch (e) {
+      await StripePendingCheckout.clear();
+      rethrow;
+    }
+  }
 
   /// Current Flutter app URL without query (for Stripe return URLs).
   static String appReturnBase() {
@@ -57,7 +93,7 @@ class StripePaymentService {
     try {
       final res = await http
           .get(Uri.parse('$base/api/payment-mode/'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(_httpTimeout);
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (data['mock_checkout'] == true) {
         if (kDebugMode) return;
@@ -66,6 +102,10 @@ class StripePaymentService {
           'Close Stripe window, run .\\RUN-STRIPE-SERVER.ps1 again (do NOT set MOCK=1).',
         );
       }
+    } on TimeoutException {
+      throw Exception(
+        'Payment server slow ($base). Render may be waking up — wait 1 minute and try Pay again.',
+      );
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception('Cannot read payment mode from $base/api/payment-mode/');
@@ -73,8 +113,9 @@ class StripePaymentService {
   }
 
   static Future<void> ensurePaymentServerReachable({
-    Duration timeout = const Duration(seconds: 10),
+    Duration? timeout,
   }) async {
+    final wait = timeout ?? _httpTimeout;
     final base = await StripePaymentConfig.resolveBaseUrl();
     if (base.isEmpty) {
       throw Exception(
@@ -84,14 +125,14 @@ class StripePaymentService {
       );
     }
     try {
-      final res = await http.get(Uri.parse('$base/')).timeout(timeout);
+      final res = await http.get(Uri.parse('$base/')).timeout(wait);
       if (res.statusCode >= 500) {
         throw Exception('Payment server error HTTP ${res.statusCode} at $base');
       }
     } on TimeoutException {
       throw Exception(
         'Payment server not responding ($base). '
-        'Run: cd "strip payment gateway"; .\\RUN-STRIPE-SERVER.ps1 (port 8002 if Django uses :8000)',
+        'Render may be waking up — wait 1 minute and try again.',
       );
     } catch (e) {
       if (e is Exception) rethrow;
@@ -123,10 +164,16 @@ class StripePaymentService {
             timeout,
             onTimeout: () => throw TimeoutException(
               'Payment server slow (${timeout.inSeconds}s). '
-              'Stripe server slow — check strip payment gateway is running (:8002) and internet/VPN.',
+              'Render may be waking up — wait 1 minute and try Pay again.',
             ),
           )
-        : await request;
+        : await request.timeout(
+            _httpTimeout,
+            onTimeout: () => throw TimeoutException(
+              'Payment server slow (${_httpTimeout.inSeconds}s). '
+              'Render may be waking up — wait 1 minute and try Pay again.',
+            ),
+          );
 
     Map<String, dynamic> data = {};
     try {

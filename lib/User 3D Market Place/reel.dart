@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import 'reel_media.dart';
 import 'tailor_portfolio.dart';
+import '../../config/mobile_media_config.dart';
+import '../../services/reel_catalog_service.dart';
 
 class ReelScreen extends StatefulWidget {
   const ReelScreen({
@@ -29,12 +33,57 @@ class _ReelScreenState extends State<ReelScreen> {
   final Map<int, bool> _videoErrors = {};
   final Map<int, String> _videoErrorMessages = {};
   late int _currentIndex;
+  List<ReelCatalogItem> _catalog = List<ReelCatalogItem>.from(kReelCatalog);
+  StreamSubscription? _catalogSub;
+  String? _seenTopFirestoreId;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex.clamp(0, kReelCatalog.length - 1);
+    _currentIndex = widget.initialIndex.clamp(0, _catalog.length - 1);
     _pageController = PageController(initialPage: _currentIndex);
+    _catalogSub = ReelCatalogService.watchCatalog().listen((list) {
+      if (!mounted || list.isEmpty) return;
+      final top = list.first;
+      final topId = top.firestoreId;
+      if (topId != null &&
+          topId.isNotEmpty &&
+          _seenTopFirestoreId != null &&
+          topId != _seenTopFirestoreId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('New reel from ${top.shopName}: ${top.videoTitle}'),
+            backgroundColor: const Color(0xFF059669),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(0);
+          _onPageChanged(0);
+        }
+      }
+      if (topId != null && topId.isNotEmpty) {
+        _seenTopFirestoreId = topId;
+      }
+      setState(() {
+        _catalog = List<ReelCatalogItem>.from(
+          list.map(
+            (r) => ReelCatalogItem(
+              id: r.id,
+              shopName: r.shopName,
+              videoTitle: r.videoTitle,
+              videoPath: r.videoPath,
+              posterAsset: r.posterAsset,
+              fallbackVideoPath: r.fallbackVideoPath,
+              firestoreId: r.firestoreId,
+            ),
+          ),
+        );
+        if (_currentIndex >= _catalog.length) {
+          _currentIndex = 0;
+        }
+      });
+    });
     if (widget.active) _initializeVideo(_currentIndex);
   }
 
@@ -50,8 +99,11 @@ class _ReelScreenState extends State<ReelScreen> {
     }
   }
 
-  VideoPlayerController _makeController(String assetPath) {
-    final src = reelVideoSource(assetPath);
+  VideoPlayerController _makeController(ReelCatalogItem reel) {
+    final src = reelVideoSource(
+      reel.videoPath,
+      fallback: reel.fallbackVideoPath,
+    );
     if (src.startsWith('http://') || src.startsWith('https://')) {
       return VideoPlayerController.networkUrl(
         Uri.parse(src),
@@ -59,22 +111,22 @@ class _ReelScreenState extends State<ReelScreen> {
       );
     }
     return VideoPlayerController.asset(
-      reelAssetKey(assetPath),
+      reelAssetKey(reel.videoPath),
       videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
   }
 
   void _initializeVideo(int index) {
     if (!widget.active) return;
-    if (index < 0 || index >= kReelCatalog.length) return;
-    final reel = kReelCatalog[index];
+    if (index < 0 || index >= _catalog.length) return;
+    final reel = _catalog[index];
     final id = reel.id;
     if (_videoControllers.containsKey(id)) {
       if (index == _currentIndex) _videoControllers[id]!.play();
       return;
     }
 
-    final controller = _makeController(reel.videoPath);
+    final controller = _makeController(reel);
     controller.initialize().then((_) {
       if (!mounted) return;
       setState(() {
@@ -85,6 +137,36 @@ class _ReelScreenState extends State<ReelScreen> {
       if (index == _currentIndex && widget.active) controller.play();
     }).catchError((Object error) {
       debugPrint('Reel video error (${reel.videoPath}): $error');
+      final fb = reel.fallbackVideoPath;
+      if (fb != null && fb.isNotEmpty && fb != reel.videoPath) {
+        final fallbackReel = ReelCatalogItem(
+          id: reel.id,
+          shopName: reel.shopName,
+          videoTitle: reel.videoTitle,
+          videoPath: fb,
+          posterAsset: reel.posterAsset,
+        );
+        final fallback = _makeController(fallbackReel);
+        fallback.initialize().then((_) {
+          if (!mounted) return;
+          _videoControllers[id]?.dispose();
+          _videoControllers[id] = fallback;
+          setState(() {
+            _videoErrors.remove(id);
+            _videoErrorMessages.remove(id);
+          });
+          fallback.setLooping(true);
+          if (index == _currentIndex && widget.active) fallback.play();
+        }).catchError((Object e2) {
+          if (!mounted) return;
+          setState(() {
+            _videoErrors[id] = true;
+            _videoErrorMessages[id] = e2.toString();
+            _videoControllers.remove(id)?.dispose();
+          });
+        });
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _videoErrors[id] = true;
@@ -96,14 +178,16 @@ class _ReelScreenState extends State<ReelScreen> {
   }
 
   void _onPageChanged(int index) {
-    if (_currentIndex >= 0 && _currentIndex < kReelCatalog.length) {
-      final prevId = kReelCatalog[_currentIndex].id;
+    if (_currentIndex >= 0 && _currentIndex < _catalog.length) {
+      final prevId = _catalog[_currentIndex].id;
       _videoControllers[prevId]?.pause();
     }
     setState(() => _currentIndex = index);
     _initializeVideo(index);
-    if (index - 1 >= 0) _initializeVideo(index - 1);
-    if (index + 1 < kReelCatalog.length) _initializeVideo(index + 1);
+    if (prefetchAdjacentReels) {
+      if (index - 1 >= 0) _initializeVideo(index - 1);
+      if (index + 1 < _catalog.length) _initializeVideo(index + 1);
+    }
   }
 
   void _toggleLike(int reelId) {
@@ -127,8 +211,73 @@ class _ReelScreenState extends State<ReelScreen> {
     );
   }
 
+  void _showAllVideos() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.grey.shade900,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'All videos',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _catalog.length,
+                  itemBuilder: (context, index) {
+                    final reel = _catalog[index];
+                    final selected = index == _currentIndex;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: const Color(0xFF059669),
+                        child: Text('${index + 1}'),
+                      ),
+                      title: Text(
+                        reel.videoTitle,
+                        style: TextStyle(
+                          color: selected ? const Color(0xFF34D399) : Colors.white,
+                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                      subtitle: Text(
+                        reel.shopName,
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
+                      ),
+                      trailing: reel.firestoreId != null
+                          ? const Icon(Icons.fiber_new, color: Colors.amber, size: 20)
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _pageController.jumpToPage(index);
+                        _onPageChanged(index);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _catalogSub?.cancel();
     _pageController.dispose();
     for (final c in _videoControllers.values) {
       c.dispose();
@@ -162,9 +311,9 @@ class _ReelScreenState extends State<ReelScreen> {
           controller: _pageController,
           scrollDirection: Axis.vertical,
           onPageChanged: _onPageChanged,
-          itemCount: kReelCatalog.length,
+          itemCount: _catalog.length,
           itemBuilder: (context, index) {
-            final reel = kReelCatalog[index];
+            final reel = _catalog[index];
             final id = reel.id;
             final isLiked = _likedReels.contains(id);
             final videoController = _videoControllers[id];
@@ -218,12 +367,25 @@ class _ReelScreenState extends State<ReelScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          if (!widget.embeddedInTab &&
-                              Navigator.canPop(context))
-                            IconButton(
-                              icon: const Icon(Icons.close, color: Colors.white),
-                              onPressed: () => Navigator.pop(context),
-                            ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton.icon(
+                                onPressed: _showAllVideos,
+                                icon: const Icon(Icons.playlist_play, color: Colors.white, size: 20),
+                                label: const Text(
+                                  'All videos',
+                                  style: TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              ),
+                              if (!widget.embeddedInTab &&
+                                  Navigator.canPop(context))
+                                IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.white),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
                       const Spacer(),

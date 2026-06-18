@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
 import 'chat.dart';
+import '../core/navigation/app_navigation.dart';
 import 'auth-login-sign/auth_storage.dart';
-import 'auth-login-sign/auth_flow.dart';
 
 class ProfileScreen extends StatefulWidget {
   @override
@@ -339,12 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTapDown: (_) => setState(() => _isPressed = true),
               onTapUp: (_) async {
                 setState(() => _isPressed = false);
-                await FirebaseAuth.instance.signOut();
-                await AuthStorage.clearAllData();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => AuthFlow()),
-                  (route) => false,
-                );
+                await AppNavigation.logoutToRolePicker(context);
               },
               onTapCancel: () => setState(() => _isPressed = false),
               child: AnimatedScale(

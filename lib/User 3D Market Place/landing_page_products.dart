@@ -171,8 +171,8 @@ const List<String> kLandingCatalogTabs = [
   'Fabric',
 ];
 
-/// Bundled landing only (no Firestore seller merge) — keeps app fast.
-const bool kIncludeSellerListingsInMarketplace = false;
+/// Include seller Firestore listings on the 3D marketplace grid.
+const bool kIncludeSellerListingsInMarketplace = true;
 
 const String kDefaultLandingCatalogTab = 'Kurta Shalwar';
 

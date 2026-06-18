@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../services/marketplace_demo_seller.dart';
 import 'product_viewer.dart';
 import 'size prediction model/live_measurement.dart';
 import 'standard_sizes.dart';
@@ -19,6 +20,8 @@ Future<void> showStitchedPurchaseSheet(
   Map<String, dynamic> product, {
   required bool openCartAfter,
 }) async {
+  final stamped = await MarketplaceDemoSeller.attachAsync(product);
+  if (!context.mounted) return;
   await showModalBottomSheet<void>(
     context: context,
     backgroundColor: Colors.white,
@@ -34,7 +37,7 @@ Future<void> showStitchedPurchaseSheet(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                product['title']?.toString() ?? 'Choose sizing',
+                stamped['title']?.toString() ?? 'Choose sizing',
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -56,7 +59,7 @@ Future<void> showStitchedPurchaseSheet(
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => StandardSizesScreen(
-                        product: product,
+                        product: stamped,
                         openCartOnComplete: openCartAfter,
                         onBack: () => Navigator.pop(context),
                       ),
@@ -75,7 +78,7 @@ Future<void> showStitchedPurchaseSheet(
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => LiveMeasurementScreen(
-                        product: product,
+                        product: stamped,
                         onBack: () => Navigator.pop(context),
                       ),
                     ),
@@ -151,15 +154,17 @@ void openProductOrPurchase(
   BuildContext context,
   Map<String, dynamic> product, {
   required bool openCartAfter,
-}) {
-  if (isStitchedOutfit(product)) {
-    showStitchedPurchaseSheet(context, product, openCartAfter: openCartAfter);
+}) async {
+  final stamped = await MarketplaceDemoSeller.attachAsync(product);
+  if (!context.mounted) return;
+  if (isStitchedOutfit(stamped)) {
+    showStitchedPurchaseSheet(context, stamped, openCartAfter: openCartAfter);
     return;
   }
   Navigator.push(
     context,
     MaterialPageRoute<void>(
-      builder: (_) => ProductViewerScreen(product: product),
+      builder: (_) => ProductViewerScreen(product: stamped),
     ),
   );
 }

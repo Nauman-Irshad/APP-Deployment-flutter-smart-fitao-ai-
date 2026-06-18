@@ -2,7 +2,27 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
+import '../User 3D Market Place/landing_page_products.dart';
 import 'seller_add_product_screen.dart';
+
+/// First items customers already see on the 3D marketplace landing.
+List<Map<String, dynamic>> get kSellerMarketplacePreviewProducts =>
+    kLandingPageProducts.take(2).toList();
+
+bool _bundledProductIsUploaded(
+  Map<String, dynamic> bundled,
+  List<ProductModel> sellerProducts,
+) {
+  final bundledId = bundled['id']?.toString().trim() ?? '';
+  final title = bundled['title']?.toString().trim().toLowerCase() ?? '';
+  for (final p in sellerProducts) {
+    if (bundledId.isNotEmpty && p.id == bundledId) return true;
+    final fpId = p.details['firebaseProductId']?.toString().trim() ?? '';
+    if (bundledId.isNotEmpty && fpId == bundledId) return true;
+    if (title.isNotEmpty && p.name.trim().toLowerCase() == title) return true;
+  }
+  return false;
+}
 
 class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
@@ -106,6 +126,14 @@ class _ProductsScreenState extends State<ProductsScreen>
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _MarketplacePreviewSection(sellerProducts: all),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      child: Text(
+                        'Your uploaded products — edit price and stock below.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.35),
+                      ),
+                    ),
                     TabBar(
                       controller: _tabController,
                       labelColor: Theme.of(context).colorScheme.primary,
@@ -538,6 +566,160 @@ class _ProductsScreenState extends State<ProductsScreen>
   }
 }
 
+/// Shows the same 1–2 products customers see on the 3D marketplace landing.
+class _MarketplacePreviewSection extends StatelessWidget {
+  const _MarketplacePreviewSection({required this.sellerProducts});
+
+  final List<ProductModel> sellerProducts;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = kSellerMarketplacePreviewProducts;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Already on 3D marketplace',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'These are live for customers now. Badge shows if you uploaded them to Firebase or they are bundled only.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          ...preview.map(
+            (p) => _BundledMarketplaceCard(
+              product: p,
+              uploaded: _bundledProductIsUploaded(p, sellerProducts),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BundledMarketplaceCard extends StatelessWidget {
+  const _BundledMarketplaceCard({
+    required this.product,
+    required this.uploaded,
+  });
+
+  final Map<String, dynamic> product;
+  final bool uploaded;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = product['title']?.toString() ?? 'Product';
+    final category = product['category']?.toString() ?? '';
+    final price = product['price'];
+    final priceText = price is num ? 'PKR ${price.toStringAsFixed(0)}' : 'PKR —';
+    final colorName = product['colorName']?.toString() ?? '';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: const Color(0xFF059669).withValues(alpha: 0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.view_in_ar, color: Color(0xFF059669), size: 36),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  if (colorName.isNotEmpty)
+                    Text(
+                      colorName,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  if (category.isNotEmpty)
+                    Text(
+                      category,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    priceText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF059669),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF059669).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF059669)),
+                        ),
+                        child: const Text(
+                          'Live on 3D marketplace',
+                          style: TextStyle(
+                            color: Color(0xFF059669),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: uploaded
+                              ? Colors.blue.withValues(alpha: 0.12)
+                              : Colors.orange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: uploaded ? Colors.blue : Colors.orange,
+                          ),
+                        ),
+                        child: Text(
+                          uploaded ? 'Uploaded by you' : 'Bundled — not uploaded',
+                          style: TextStyle(
+                            color: uploaded ? Colors.blue.shade800 : Colors.orange.shade800,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class SellerProductCard extends StatelessWidget {
   final ProductModel product;
   final bool isInactiveTab;
@@ -672,6 +854,29 @@ class SellerProductCard extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
+                            if (!isInactiveTab && product.showOnLanding)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF059669).withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFF059669),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'On 3D marketplace',
+                                  style: TextStyle(
+                                    color: Color(0xFF059669),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,

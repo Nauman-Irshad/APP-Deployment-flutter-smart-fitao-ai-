@@ -1,8 +1,8 @@
 [
-  {"name": "Black Kurta", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/kurta/black%20kurta%20.glb", "category": "kurta", "match_key": "black kurta"},
-  {"name": "Brown Kurta", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/kurta/brown%20kurta.glb", "category": "kurta", "match_key": "brown kurta"},
-  {"name": "Sky Blue Kurta", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/kurta/sky%20blue%20kurta.glb", "category": "kurta", "match_key": "sky blue kurta"},
-  {"name": "Black Shalwar Kameez", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/shalwar%20kameez/black%20shalwar%20kameez.glb", "category": "shalwar kameez", "match_key": "black shalwar kameez"},
-  {"name": "Brown Shalwar Kameez", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/shalwar%20kameez/brown%201.glb", "category": "shalwar kameez", "match_key": "brown shalwar kameez"},
-  {"name": "White Shalwar Kameez", "model_url": "https://fyp-web-code-deployment-flea.vercel.app/chatbot/3d/models/shalwar%20kameez/white%20shalwar%20kameez.glb", "category": "shalwar kameez", "match_key": "white shalwar kameez"}
+  {"name": "Black Kurta", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/kurta/black%20kurta%20.glb", "category": "kurta", "match_key": "black kurta"},
+  {"name": "Brown Kurta", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/kurta/brown%20kurta.glb", "category": "kurta", "match_key": "brown kurta"},
+  {"name": "Sky Blue Kurta", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/kurta/sky%20blue%20kurta.glb", "category": "kurta", "match_key": "sky blue kurta"},
+  {"name": "Black Shalwar Kameez", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/shalwar/black%20shalwar%20kameez.glb", "category": "shalwar kameez", "match_key": "black shalwar kameez"},
+  {"name": "Brown Shalwar Kameez", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/shalwar/brown%201.glb", "category": "shalwar kameez", "match_key": "brown shalwar kameez"},
+  {"name": "White Shalwar Kameez", "model_url": "https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev/landing%20page%20product/shalwar/white%20shalwar%20kameez.glb", "category": "shalwar kameez", "match_key": "white shalwar kameez"}
 ]

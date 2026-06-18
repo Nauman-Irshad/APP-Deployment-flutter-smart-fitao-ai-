@@ -1,8 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../payments/checkout_order_completion.dart';
+import '../../payments/demo_order_placement.dart';
 import '../../payments/stripe_pending_checkout.dart';
 import '../../payments/stripe_payment_service.dart';
+import '../../Order-Tracking-System/tracking.dart' show OrderType;
 import '../marketplace_bottom_nav.dart';
 import '../shopping_cart.dart';
 import '../viewer_asset_src.dart';
@@ -36,6 +38,7 @@ class CheckoutPage extends StatefulWidget {
 class _CheckoutPageState extends State<CheckoutPage> {
   int _quantity = 1;
   bool _isLoading = false;
+  bool _isDemoPlacing = false;
 
   List<CartItem> get _items =>
       widget.cartItems ?? ShoppingCart.instance.items;
@@ -177,48 +180,75 @@ class _CheckoutPageState extends State<CheckoutPage> {
             color: Colors.white,
             child: SafeArea(
               top: false,
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _placeOrder,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF059669),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: (_isLoading || _isDemoPlacing) ? null : _placeDemoOrder,
+                      icon: _isDemoPlacing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.play_circle_outline),
+                      label: const Text('Order Place Demo'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFb45309),
+                        side: const BorderSide(color: Color(0xFFd97706), width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Pay & Place Order',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 2),
-                            Text(
-                              'Secure checkout via Stripe',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: (_isLoading || _isDemoPlacing) ? null : _placeOrder,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF059669),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                ),
+                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Pay & Place Order',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Secure checkout via Stripe',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -418,11 +448,80 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
+  Map<String, dynamic> _checkoutProduct() {
+    if (widget.product != null) {
+      return Map<String, dynamic>.from(widget.product!);
+    }
+    final first = _items.isNotEmpty ? _items.first : null;
+    if (first == null) return {};
+    return {
+      'id': first.id,
+      'title': first.title,
+      'price': first.price,
+      'size': first.size,
+      'color': first.color,
+      'material': first.material,
+      'category': first.isFabric ? 'Fabric' : first.material,
+      'imagePath': first.imagePath,
+    };
+  }
+
+  Future<void> _placeDemoOrder() async {
+    final product = _checkoutProduct();
+    if (product.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No product in cart')),
+      );
+      return;
+    }
+
+    setState(() => _isDemoPlacing = true);
+    try {
+      final first = _items.isNotEmpty ? _items.first : null;
+      final qty = first?.quantity ?? _quantity;
+      final unitPrice = first?.price.toDouble() ??
+          (widget.product?['price'] as num?)?.toDouble() ??
+          0;
+      final details = <String, dynamic>{
+        'flow': 'standard_size',
+        'size': first?.size ?? widget.product?['size']?.toString() ?? '',
+        'color': first?.color ?? widget.product?['color']?.toString() ?? '',
+        'material': first?.material ?? widget.product?['material']?.toString() ?? '',
+        'quantity': qty,
+        'shippingPkr': _delivery,
+        'orderTotalPkr': _total,
+      };
+
+      await DemoOrderPlacement.placeAndGoHome(
+        context: context,
+        product: product,
+        orderType: OrderType.standard,
+        details: details,
+        quantity: qty,
+        unitPrice: unitPrice,
+        deliveryAddress: widget.address,
+        customerName: widget.userName,
+        clearCart: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isDemoPlacing = false);
+    }
+  }
+
   Future<void> _placeOrder() async {
     setState(() => _isLoading = true);
 
     try {
-      final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sign in to pay with Stripe')),
+          );
+        }
+        return;
+      }
+      final userId = user.uid;
       final first = _items.isNotEmpty ? _items.first : null;
       final title = first?.title ??
           widget.product?['title']?.toString() ??
@@ -445,8 +544,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ? '${_items.length} items · ${_rs(_total)}'
           : 'Qty $qty · ${_rs(_total)}';
 
-      await StripePendingCheckout.save(
-        StripePendingCheckout(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Opening Stripe secure checkout...'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      }
+
+      await StripePaymentService.startCheckout(
+        amountPkr: _total,
+        productName: title,
+        description: description,
+        pending: StripePendingCheckout(
           userId: userId,
           productId: productId,
           productTitle: title,
@@ -460,29 +571,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
           reducedPrice: widget.reducedPrice ?? _total.toDouble(),
         ),
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Opening Stripe secure checkout...'),
-            backgroundColor: Color(0xFF059669),
-          ),
-        );
-      }
-
-      final session = await StripePaymentService.createCheckoutSession(
-        amountPkr: _total,
-        productName: title,
-        description: description,
-      );
-      await StripePaymentService.openCheckoutUrl(session.url);
     } catch (e) {
-      await StripePendingCheckout.clear();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Payment could not start. Is Stripe server running on port 8000? ($e)',
+              'Payment could not start: ${e.toString().replaceFirst('Exception: ', '')}',
             ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),

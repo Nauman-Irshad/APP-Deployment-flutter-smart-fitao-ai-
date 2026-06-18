@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../services/marketplace_demo_seller.dart';
 import 'fabric_product_screen.dart';
 import 'landing_catalog_store.dart';
 import 'landing_page_products.dart';
@@ -14,15 +15,17 @@ import 'product_model_preview.dart';
 import 'viewer_asset_src.dart';
 
 /// Opens the correct detail page (fabric vs stitched 3D).
-void openLandingProduct(BuildContext context, Map<String, dynamic> product) {
+void openLandingProduct(BuildContext context, Map<String, dynamic> product) async {
+  final stamped = await MarketplaceDemoSeller.attachAsync(product);
+  if (!context.mounted) return;
   final isFabric =
-      product['section'] == 'Fabric' || product['category'] == 'Fabric';
+      stamped['section'] == 'Fabric' || stamped['category'] == 'Fabric';
   Navigator.push(
     context,
     MaterialPageRoute<void>(
       builder: (_) => isFabric
-          ? FabricProductScreen(product: product)
-          : ProductViewerScreen(product: product),
+          ? FabricProductScreen(product: stamped)
+          : ProductViewerScreen(product: stamped),
     ),
   );
 }

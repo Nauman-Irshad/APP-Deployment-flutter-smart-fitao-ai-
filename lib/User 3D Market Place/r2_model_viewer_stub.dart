@@ -7,12 +7,14 @@ Widget buildR2ModelViewer({
   required String alt,
   required bool compact,
   required Color backgroundColor,
+  int staggerIndex = 0,
 }) {
+  final eager = staggerIndex == 0;
   return ModelViewer(
     key: ValueKey(src),
     src: src,
     alt: alt,
-    loading: Loading.eager,
+    loading: eager ? Loading.eager : Loading.lazy,
     reveal: Reveal.auto,
     autoRotate: true,
     autoRotateDelay: 0,

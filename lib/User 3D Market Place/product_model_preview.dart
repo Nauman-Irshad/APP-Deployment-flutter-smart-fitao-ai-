@@ -34,6 +34,7 @@ class ProductModelPreview extends StatelessWidget {
           alt: alt,
           compact: compact,
           backgroundColor: _bg,
+          staggerIndex: staggerIndex,
         ),
       ),
     );

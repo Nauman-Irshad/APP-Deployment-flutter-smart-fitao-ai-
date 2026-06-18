@@ -11,8 +11,9 @@ Widget buildR2ModelViewer({
   required String alt,
   required bool compact,
   required Color backgroundColor,
+  int staggerIndex = 0,
 }) {
-  final viewType = 'r2-mv-${src.hashCode.abs()}-${compact ? 'c' : 'f'}';
+  final viewType = 'r2-mv-${src.hashCode.abs()}-${compact ? 'c' : 'f'}-$staggerIndex';
   if (!_registeredViewTypes.contains(viewType)) {
     _registeredViewTypes.add(viewType);
     const bgCss = '#141414';
@@ -34,9 +35,13 @@ Widget buildR2ModelViewer({
       mv.style.setProperty('display', 'block');
       mv.style.backgroundColor = bgCss;
 
+      mv.setAttribute('shadow-intensity', '0');
+      mv.setAttribute('environment-image', 'neutral');
       mv.setAttribute('crossorigin', 'anonymous');
       mv.setAttribute('alt', alt);
-      mv.setAttribute('loading', 'eager');
+      final eager = staggerIndex == 0;
+      mv.setAttribute('loading', eager ? 'eager' : 'lazy');
+      mv.setAttribute('fetchpriority', eager ? 'high' : 'low');
       mv.setAttribute('reveal', 'auto');
       mv.setAttribute('auto-rotate', '');
       mv.setAttribute('auto-rotate-delay', '0');

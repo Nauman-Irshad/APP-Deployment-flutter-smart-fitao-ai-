@@ -105,6 +105,23 @@
     return loadPromise;
   }
 
+  function prefetchProductGlbs(products) {
+    if (!products || !products.length) return;
+    var seen = {};
+    products.forEach(function (p) {
+      var url = String(p.model_url || '').trim();
+      if (!url || seen[url]) return;
+      seen[url] = true;
+      var link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'fetch';
+      link.href = url;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+      fetch(url, { mode: 'cors', headers: { Range: 'bytes=0-65535' } }).catch(function () {});
+    });
+  }
+
   function faqAnswer(question) {
     var faq = loadFaq();
     if (!faq || !faq.length) return null;

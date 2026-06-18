@@ -31,44 +31,48 @@ const Map<String, Map<String, dynamic>> kTailorShopProfiles = {
   },
 };
 
-/// Reels — online only (R2 `reels/`).
-const List<ReelCatalogItem> kReelCatalog = [
-  ReelCatalogItem(
-    id: 1,
-    shopName: 'Cotton King Tailors',
-    videoTitle: 'Tailoring showcase',
-    videoPath: ProductionUrls.reel1,
-    posterAsset: 'assets/banner 1.png',
-  ),
-  ReelCatalogItem(
-    id: 2,
-    shopName: 'Royal Stitch House',
-    videoTitle: 'Baju cutting & tailoring',
-    videoPath: ProductionUrls.reel2,
-    posterAsset: 'assets/banner 1.png',
-  ),
-  ReelCatalogItem(
-    id: 3,
-    shopName: 'Heritage Tailors',
-    videoTitle: 'Ladies suit new design',
-    videoPath: ProductionUrls.reel3,
-    posterAsset: 'assets/banner 2.png',
-  ),
-  ReelCatalogItem(
-    id: 4,
-    shopName: 'Mars Tailors',
-    videoTitle: 'Tailor reel',
-    videoPath: ProductionUrls.reel4,
-    posterAsset: 'assets/banner 33.png',
-  ),
-  ReelCatalogItem(
-    id: 5,
-    shopName: 'Master Cutter Studio',
-    videoTitle: 'Trouser cutting',
-    videoPath: ProductionUrls.reel5,
-    posterAsset: 'assets/banner 2.png',
-  ),
-];
+/// Reels — online only (R2 `reels/`). Desktop URLs work on web and mobile.
+List<ReelCatalogItem> get kReelCatalog => const [
+      ReelCatalogItem(
+        id: 1,
+        shopName: 'Cotton King Tailors',
+        videoTitle: 'Tailoring showcase',
+        videoPath: ProductionUrls.reel1,
+        posterAsset: 'assets/banner 1.png',
+        fallbackVideoPath: ProductionUrls.reel4,
+      ),
+      ReelCatalogItem(
+        id: 2,
+        shopName: 'Royal Stitch House',
+        videoTitle: 'Baju cutting & tailoring',
+        videoPath: ProductionUrls.reel2,
+        posterAsset: 'assets/banner 1.png',
+        fallbackVideoPath: ProductionUrls.reel4,
+      ),
+      ReelCatalogItem(
+        id: 3,
+        shopName: 'Heritage Tailors',
+        videoTitle: 'Ladies suit new design',
+        videoPath: ProductionUrls.reel3,
+        posterAsset: 'assets/banner 2.png',
+        fallbackVideoPath: ProductionUrls.reel4,
+      ),
+      ReelCatalogItem(
+        id: 4,
+        shopName: 'Mars Tailors',
+        videoTitle: 'Tailor reel',
+        videoPath: ProductionUrls.reel4,
+        posterAsset: 'assets/banner 33.png',
+      ),
+      ReelCatalogItem(
+        id: 5,
+        shopName: 'Master Cutter Studio',
+        videoTitle: 'Trouser cutting',
+        videoPath: ProductionUrls.reel5,
+        posterAsset: 'assets/banner 2.png',
+        fallbackVideoPath: ProductionUrls.reel4,
+      ),
+    ];
 
 class ReelCatalogItem {
   const ReelCatalogItem({
@@ -77,6 +81,8 @@ class ReelCatalogItem {
     required this.videoTitle,
     required this.videoPath,
     required this.posterAsset,
+    this.fallbackVideoPath,
+    this.firestoreId,
   });
 
   final int id;
@@ -84,6 +90,9 @@ class ReelCatalogItem {
   final String videoTitle;
   final String videoPath;
   final String posterAsset;
+  /// Used if primary URL fails to play on this device.
+  final String? fallbackVideoPath;
+  final String? firestoreId;
 }
 
 List<ReelCatalogItem> reelsForTailor(String shopName) {
@@ -103,7 +112,7 @@ Map<String, dynamic> tailorProfileForShop(String shopName) {
 String reelVideoFileName(String path) => path.split('/').last;
 
 /// Always network URL for reels (R2).
-String reelVideoSource(String path) {
+String reelVideoSource(String path, {String? fallback}) {
   final p = path.trim();
   if (p.startsWith('http://') || p.startsWith('https://')) return p;
   if (kIsWeb) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
+import '../services/marketplace_badge_service.dart';
 import 'seller_3d_upload_service.dart';
 
 /// Add product — same fields as React dashboard (`SellerAddProduct` / `sellerProducts.js`).
@@ -274,10 +275,12 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
         }
       }
 
+      await MarketplaceBadgeService.instance.bumpNewProduct();
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Product saved — visible on user 3D landing page'),
+          content: Text('Product added to 3D marketplace — customers see a new item notification'),
           backgroundColor: _green,
         ),
       );

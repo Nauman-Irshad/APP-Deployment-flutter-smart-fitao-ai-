@@ -7,6 +7,7 @@ class TailorChatInboxItem {
     required this.customerName,
     required this.lastMessage,
     this.updatedAt,
+    this.unreadForTailor = 0,
   });
 
   final String chatId;
@@ -14,17 +15,21 @@ class TailorChatInboxItem {
   final String customerName;
   final String lastMessage;
   final DateTime? updatedAt;
+  final int unreadForTailor;
 
   static TailorChatInboxItem fromMap(Map<String, dynamic> data) {
     final updated = data['updatedAt'];
     DateTime? dt;
     if (updated is Timestamp) dt = updated.toDate();
+    final unreadRaw = data['unreadForTailor'];
+    final unread = unreadRaw is num ? unreadRaw.toInt() : 0;
     return TailorChatInboxItem(
       chatId: data['chatId']?.toString() ?? '',
       customerId: data['customerId']?.toString() ?? '',
       customerName: data['customerName']?.toString() ?? 'Customer',
       lastMessage: data['lastPreview']?.toString() ?? '',
       updatedAt: dt,
+      unreadForTailor: unread,
     );
   }
 }
@@ -147,6 +152,9 @@ class TailorChatService {
     });
     await _db.collection('tailor_customer_chats').doc(chatId).set({
       'lastPreview': _previewForType(type, text),
+      'lastSender': 'customer',
+      'unreadForTailor': FieldValue.increment(1),
+      'unreadForCustomer': 0,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -174,6 +182,9 @@ class TailorChatService {
     });
     await _db.collection('tailor_customer_chats').doc(chatId).set({
       'lastPreview': text,
+      'lastSender': 'tailor',
+      'unreadForTailor': 0,
+      'unreadForCustomer': FieldValue.increment(1),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -202,6 +213,65 @@ class TailorChatService {
     return watchMessagesRaw(chatId).map(
       (list) => list.map(TailorChatMessage.fromMap).toList(),
     );
+  }
+
+  static Stream<int> watchTailorUnreadTotal(String tailorId) {
+    return watchTailorInbox(tailorId).map(
+      (items) => items.fold<int>(0, (sum, i) => sum + i.unreadForTailor),
+    );
+  }
+
+  static Stream<int> watchCustomerUnreadTotal(String customerId) {
+    return _db
+        .collection('tailor_customer_chats')
+        .where('customerId', isEqualTo: customerId)
+        .snapshots()
+        .map((snap) {
+          var total = 0;
+          for (final d in snap.docs) {
+            final n = d.data()['unreadForCustomer'];
+            if (n is num) total += n.toInt();
+          }
+          return total;
+        });
+  }
+
+  static Future<void> markChatReadForCustomer(String chatId) async {
+    await _db.collection('tailor_customer_chats').doc(chatId).set({
+      'unreadForCustomer': 0,
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> markAllReadForCustomer(String customerId) async {
+    final snap = await _db
+        .collection('tailor_customer_chats')
+        .where('customerId', isEqualTo: customerId)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.set(doc.reference, {'unreadForCustomer': 0}, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  static Future<void> markChatReadForTailor(String chatId) async {
+    await _db.collection('tailor_customer_chats').doc(chatId).set({
+      'unreadForTailor': 0,
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> markAllReadForTailor(String tailorId) async {
+    final snap = await _db
+        .collection('tailor_customer_chats')
+        .where('tailorId', isEqualTo: tailorId)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.set(doc.reference, {'unreadForTailor': 0}, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   static Stream<List<TailorChatInboxItem>> watchTailorInbox(String tailorId) {

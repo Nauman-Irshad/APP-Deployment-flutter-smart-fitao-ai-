@@ -1976,6 +1976,7 @@ class OrderCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.none,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2054,9 +2055,23 @@ class OrderCard extends StatelessWidget {
               ],
             ),
             
-            const SizedBox(height: 12),
-            
-            // Tracking Widget
+            const SizedBox(height: 8),
+            if (order.type == OrderType.custom)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.swipe_right, size: 16, color: Colors.grey.shade600),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Swipe right to see all 6 tracking steps',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             CircularTracking(
               order: order,
               onBoxTap: hasNotification ? onTap : null,
@@ -2064,46 +2079,45 @@ class OrderCard extends StatelessWidget {
             
             const SizedBox(height: 12),
             
-            // Action Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (hasNotification)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
+            // Action Buttons — horizontal scroll so nothing is clipped on narrow phones
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  if (hasNotification)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'New Update!',
+                        style: TextStyle(color: Colors.white, fontSize: 10),
+                      ),
                     ),
-                    child: const Text(
-                      'New Update!',
-                      style: TextStyle(color: Colors.white, fontSize: 10),
+                  if (hasNotification) const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: onMoreDetails,
+                    child: Text(
+                      'more details',
+                      style: TextStyle(
+                        color: role == 'user'
+                            ? Colors.green
+                            : role == 'seller'
+                                ? Colors.orange
+                                : Colors.purple,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: onMoreDetails,
-                      child: Text(
-                        'more details',
-                        style: TextStyle(
-                          color: role == 'user' 
-                              ? Colors.green 
-                              : role == 'seller' 
-                                  ? Colors.orange 
-                                  : Colors.purple,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
+                  if (hasNotification)
+                    IconButton(
+                      onPressed: onTap,
+                      icon: const Icon(Icons.notifications_active, color: Colors.red),
                     ),
-                    if (hasNotification)
-                      IconButton(
-                        onPressed: onTap,
-                        icon: const Icon(Icons.notifications_active, color: Colors.red),
-                      ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -2370,8 +2384,8 @@ class _TrackOrdersPageState extends State<TrackOrdersPage> {
   }
 }
 
-// Circular Tracking Widget
-class CircularTracking extends StatelessWidget {
+// Circular Tracking Widget — horizontal scroll on narrow phones (Infinix Hot 40, etc.)
+class CircularTracking extends StatefulWidget {
   final Order order;
   final VoidCallback? onBoxTap;
 
@@ -2382,81 +2396,102 @@ class CircularTracking extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    List<Map<String, dynamic>> steps;
-    
+  State<CircularTracking> createState() => _CircularTrackingState();
+}
+
+class _CircularTrackingState extends State<CircularTracking> {
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _stepsForOrder() {
+    final order = widget.order;
     if (order.type == OrderType.standard) {
-      steps = [
+      return [
         {'label': 'To Ship', 'status': order.status.index >= 1, 'type': 'to_ship'},
-        {'label': 'Seller\nShipped', 'status': order.status.index >= 6, 'type': 'shipped'},
+        {'label': 'Seller Shipped', 'status': order.status.index >= 6, 'type': 'shipped'},
         {'label': 'Delivered', 'status': order.status.index >= 7, 'type': 'delivered', 'clickable': true},
-        {'label': 'Payment\nReceived', 'status': order.status.index >= 8, 'type': 'payment_received'},
-      ];
-    } else {
-      steps = [
-        {'label': 'Seller to\nTailor', 'status': order.status.index >= 2, 'type': 'seller_to_tailor'},
-        {'label': 'Tailor\nDelivered', 'status': order.status.index >= 3, 'type': 'tailor_delivered'},
-        {'label': 'Tailor\nStitched', 'status': order.status.index >= 4, 'type': 'tailor_stitched'},
-        {'label': 'Tailor to\nShip', 'status': order.status.index >= 5, 'type': 'tailor_to_ship'},
-        {'label': 'Delivered', 'status': order.status.index >= 7, 'type': 'delivered', 'clickable': true},
-        {'label': 'Payment\nReceived', 'status': order.status.index >= 8, 'type': 'payment_received'},
+        {'label': 'Payment Received', 'status': order.status.index >= 8, 'type': 'payment_received'},
       ];
     }
+    return [
+      {'label': 'Seller to Tailor', 'status': order.status.index >= 2, 'type': 'seller_to_tailor'},
+      {'label': 'Tailor Delivered', 'status': order.status.index >= 3, 'type': 'tailor_delivered'},
+      {'label': 'Tailor Stitched', 'status': order.status.index >= 4, 'type': 'tailor_stitched'},
+      {'label': 'Tailor to Ship', 'status': order.status.index >= 5, 'type': 'tailor_to_ship'},
+      {'label': 'Delivered', 'status': order.status.index >= 7, 'type': 'delivered', 'clickable': true},
+      {'label': 'Payment Received', 'status': order.status.index >= 8, 'type': 'payment_received'},
+    ];
+  }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(steps.length * 2 - 1, (index) {
-          if (index.isOdd) {
-            return Container(
-              width: 30,
-              height: 2,
-              color: steps[(index ~/ 2)]['status'] && steps[(index ~/ 2) + 1]['status']
-                  ? Colors.green
-                  : Colors.grey.shade300,
-            );
-          } else {
-            final stepIndex = index ~/ 2;
-            final isCompleted = steps[stepIndex]['status'] as bool;
-            final isClickable = steps[stepIndex]['clickable'] == true;
-            final hasNotification = order.getUnreadNotifications()
-                .any((n) => n.type == steps[stepIndex]['type']);
+  @override
+  Widget build(BuildContext context) {
+    final order = widget.order;
+    final onBoxTap = widget.onBoxTap;
+    final steps = _stepsForOrder();
+    final screenW = MediaQuery.sizeOf(context).width;
+    final compact = screenW < 420;
+    final circle = compact ? 46.0 : 56.0;
+    final connector = compact ? 14.0 : 20.0;
+    final stepWidth = compact ? 82.0 : 92.0;
+    final labelSize = compact ? 9.5 : 10.0;
+    final stepFont = compact ? 15.0 : 17.0;
+    final rowMinWidth =
+        steps.length * stepWidth + (steps.length - 1) * connector + 24;
 
-            return GestureDetector(
-              onTap: isClickable && !isCompleted ? onBoxTap : null,
-              child: Stack(
+    Widget stepCircle(int stepIndex) {
+      final isCompleted = steps[stepIndex]['status'] as bool;
+      final isClickable = steps[stepIndex]['clickable'] == true;
+      final label = steps[stepIndex]['label'] as String;
+      final hasNotification = order
+          .getUnreadNotifications()
+          .any((n) => n.type == steps[stepIndex]['type']);
+
+      return SizedBox(
+        width: stepWidth,
+        child: GestureDetector(
+          onTap: isClickable && !isCompleted ? onBoxTap : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
                 clipBehavior: Clip.none,
+                alignment: Alignment.center,
                 children: [
                   Container(
-                    width: 70,
-                    height: 70,
+                    width: circle,
+                    height: circle,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: isCompleted ? Colors.green : Colors.white,
                       border: Border.all(
-                        color: isCompleted 
-                            ? Colors.green 
-                            : isClickable 
-                                ? Colors.blue 
+                        color: isCompleted
+                            ? Colors.green
+                            : isClickable
+                                ? Colors.blue
                                 : Colors.grey.shade300,
-                        width: isClickable && !isCompleted ? 3 : 2,
+                        width: isClickable && !isCompleted ? 2.5 : 2,
                       ),
                     ),
                     child: Center(
                       child: Text(
-                        (stepIndex + 1).toString(),
+                        '${stepIndex + 1}',
                         style: TextStyle(
                           color: isCompleted ? Colors.white : Colors.grey.shade600,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: stepFont,
                         ),
                       ),
                     ),
                   ),
                   if (hasNotification)
                     Positioned(
-                      top: -5,
-                      right: -5,
+                      top: -4,
+                      right: compact ? 8 : 12,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: const BoxDecoration(
@@ -2467,34 +2502,80 @@ class CircularTracking extends StatelessWidget {
                           '1',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
                     ),
-                  Positioned(
-                    bottom: -20,
-                    left: 0,
-                    right: 0,
-                    child: Text(
-                      steps[stepIndex]['label']!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 10,
-                        height: 1.1,
-                        color: isCompleted
-                            ? Colors.green.shade700
-                            : (isClickable ? Colors.blue : Colors.grey.shade700),
-                        fontWeight: isClickable ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                  ),
                 ],
               ),
-            );
-          }
-        }),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                softWrap: true,
+                style: TextStyle(
+                  fontSize: labelSize,
+                  height: 1.15,
+                  color: isCompleted
+                      ? Colors.green.shade700
+                      : (isClickable ? Colors.blue : Colors.grey.shade700),
+                  fontWeight: isClickable ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget connectorLine(int afterIndex) {
+      final active = steps[afterIndex]['status'] as bool &&
+          steps[afterIndex + 1]['status'] as bool;
+      return Container(
+        width: connector,
+        height: 2,
+        margin: EdgeInsets.only(bottom: compact ? 28 : 32),
+        color: active ? Colors.green : Colors.grey.shade300,
+      );
+    }
+
+    final children = <Widget>[];
+    for (var i = 0; i < steps.length; i++) {
+      children.add(stepCircle(i));
+      if (i < steps.length - 1) {
+        children.add(connectorLine(i));
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Scrollbar(
+            controller: _scroll,
+            thumbVisibility: steps.length > 4,
+            child: SingleChildScrollView(
+              controller: _scroll,
+              scrollDirection: Axis.horizontal,
+              primary: false,
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: rowMinWidth),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ...children,
+                    const SizedBox(width: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

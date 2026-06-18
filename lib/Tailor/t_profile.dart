@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
-import '../User 3D Market Place/auth-login-sign/auth_flow.dart';
+import '../core/navigation/app_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -194,14 +194,7 @@ class _TailorProfileScreenState extends State<ProfileScreen> {
 
             Center(
               child: ElevatedButton.icon(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute<void>(builder: (_) => AuthFlow()),
-                    (route) => false,
-                  );
-                },
+                onPressed: () => AppNavigation.logoutToRolePicker(context),
                 icon: const Icon(Icons.logout, color: Colors.white),
                 label: const Text(
                   'Logout',

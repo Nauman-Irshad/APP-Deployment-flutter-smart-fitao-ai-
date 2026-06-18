@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../payments/stripe_payment_config.dart';
+import '../Order-Tracking-System/tracking.dart' show OrderType;
+import '../payments/demo_order_placement.dart';
 import '../payments/stripe_payment_service.dart';
 import '../payments/stripe_pending_checkout.dart';
 import 'try_on_order_session.dart';
@@ -23,6 +24,7 @@ class TryOnFinalCartScreen extends StatefulWidget {
 class _TryOnFinalCartScreenState extends State<TryOnFinalCartScreen> {
   final _session = TryOnOrderSession.instance;
   bool _paying = false;
+  bool _demoPlacing = false;
   int _payPercent = 0;
   String _payStep = '';
   String? _payError;
@@ -37,6 +39,49 @@ class _TryOnFinalCartScreenState extends State<TryOnFinalCartScreen> {
       _payStep = step;
       if (percent < 100) _payError = null;
     });
+  }
+
+  Future<void> _placeDemoOrder() async {
+    final tailor = _session.selectedTailor;
+    if (tailor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a tailor from the list first')),
+      );
+      return;
+    }
+
+    setState(() => _demoPlacing = true);
+    try {
+      var product = Map<String, dynamic>.from(_session.marketplaceProductMap());
+      if (product.isEmpty) {
+        product = {
+          'id': _session.marketplaceProductId.isNotEmpty
+              ? _session.marketplaceProductId
+              : _session.garmentFileName,
+          'title': _session.garmentTitle,
+          'price': _session.productPricePkr,
+        };
+      }
+      final details = <String, dynamic>{
+        'flow': '2d_try_on',
+        'predictedSize': _session.predictedSizeLabel,
+        'measurementsInches': _session.measurementsInches,
+        'sizeSummary': _session.sizeSummary,
+      };
+      await DemoOrderPlacement.placeAndGoHome(
+        context: context,
+        product: product,
+        orderType: OrderType.custom,
+        details: details,
+        quantity: 1,
+        unitPrice: _session.productPricePkr.toDouble(),
+        tailor: tailor,
+        tailorStitchingTotal: _session.stitchingPkr.toDouble(),
+        precomputedTailorProfitTotal: tailor.tailorProfitPerUnit,
+      );
+    } finally {
+      if (mounted) setState(() => _demoPlacing = false);
+    }
   }
 
   Future<void> _payWithStripe() async {
@@ -62,11 +107,15 @@ class _TryOnFinalCartScreenState extends State<TryOnFinalCartScreen> {
     });
 
     try {
-      _setProgress(10, 'Saving order for return from Stripe…');
-      final userId = 'tryon_${DateTime.now().millisecondsSinceEpoch}';
-      await StripePendingCheckout.save(
-        StripePendingCheckout(
-          userId: userId,
+      _setProgress(15, 'Opening Stripe secure checkout…');
+      final tailor = _session.selectedTailor!;
+      await StripePaymentService.startCheckout(
+        amountPkr: _session.totalPkr,
+        productName: _session.garmentTitle,
+        description:
+            'Product ${_rs(_session.productPricePkr)} · Stitching ${_rs(_session.stitchingPkr)} · Shipping ${_rs(_session.shippingPkr)} · ${_session.sizeSummary}',
+        pending: StripePendingCheckout(
+          userId: 'tryon_${DateTime.now().millisecondsSinceEpoch}',
           productId: _session.garmentFileName.isNotEmpty
               ? _session.garmentFileName
               : 'tryon_product',
@@ -80,27 +129,8 @@ class _TryOnFinalCartScreenState extends State<TryOnFinalCartScreen> {
           reducedPrice: _session.totalPkr.toDouble(),
         ),
       );
-
-      _setProgress(20, 'Checking live Stripe mode (no demo)…');
-      await StripePaymentService.ensureLiveCheckoutMode();
-      _setProgress(30, 'Checking payment server ${StripePaymentConfig.baseUrl}…');
-      await StripePaymentService.ensurePaymentServerReachable();
-
-      _setProgress(45, 'Creating Stripe Checkout session…');
-      final checkout = await StripePaymentService.createCheckoutSession(
-        amountPkr: _session.totalPkr,
-        productName: _session.garmentTitle,
-        description:
-            'Product ${_rs(_session.productPricePkr)} · Stitching ${_rs(_session.stitchingPkr)} · Shipping ${_rs(_session.shippingPkr)}',
-        timeout: null,
-      );
-
-      _setProgress(85, 'Opening Stripe Checkout page…');
-      await StripePaymentService.openCheckoutUrl(checkout.url);
       _setProgress(100, 'Complete payment on checkout.stripe.com (4242 4242 4242 4242)');
-      _setProgress(100, 'Redirected to Stripe — complete payment in browser');
     } catch (e) {
-      await StripePendingCheckout.clear();
       final msg = e.toString().replaceFirst('Exception: ', '');
       if (mounted) {
         setState(() {
@@ -244,8 +274,28 @@ class _TryOnFinalCartScreenState extends State<TryOnFinalCartScreen> {
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: paid || _paying || _demoPlacing ? null : _placeDemoOrder,
+                icon: _demoPlacing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.play_circle_outline),
+                label: const Text('Order Place Demo'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFb45309),
+                  side: const BorderSide(color: Color(0xFFd97706), width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: paid || _paying ? null : _payWithStripe,
+                onPressed: paid || _paying || _demoPlacing ? null : _payWithStripe,
                 icon: _paying
                     ? const SizedBox(
                         width: 18,

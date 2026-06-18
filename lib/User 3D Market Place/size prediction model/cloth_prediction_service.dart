@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -18,7 +19,7 @@ class ClothPredictionService {
   Future<void> ensureApiReady() async {
     final health = ClothPredictionConfig.uri('/api/health');
     Object? lastError;
-    for (var attempt = 1; attempt <= 3; attempt++) {
+    for (var attempt = 1; attempt <= 5; attempt++) {
       try {
         final res = await http.get(health).timeout(_wakeTimeout);
         if (res.ok) {
@@ -28,8 +29,8 @@ class ClothPredictionService {
       } catch (e) {
         lastError = e;
       }
-      if (attempt < 3) {
-        await Future<void>.delayed(Duration(seconds: attempt * 2));
+      if (attempt < 5) {
+        await Future<void>.delayed(Duration(seconds: attempt * 3));
       }
     }
     if (ClothPredictionConfig.usesLiveRender) {
@@ -38,6 +39,12 @@ class ClothPredictionService {
         '${lastError != null ? ' ($lastError)' : ''}',
       );
     }
+  }
+
+  /// Fire-and-forget ping while user browses marketplace (no error if cold).
+  void warmApiInBackground() {
+    if (!ClothPredictionConfig.usesLiveRender) return;
+    ensureApiReady().then((_) {}, onError: (_) {});
   }
 
   Future<Map<String, double>> predict({

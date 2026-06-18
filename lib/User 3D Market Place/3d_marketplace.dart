@@ -26,6 +26,11 @@ import 'shopping_cart.dart';
 import 'marketplace_bottom_nav.dart';
 import 'marketplace_theme.dart';
 import 'tailor_portfolio.dart';
+import '../../services/marketplace_demo_seller.dart';
+import '../../services/marketplace_badge_service.dart';
+import '../../services/customer_chat_badges.dart';
+import '../../services/seller_chat_service.dart';
+import '../../services/tailor_chat_service.dart';
 import '../../2d_try_on_app/captured_photo_session.dart';
 import '../../2d_try_on_app/try_on_handoff.dart';
 import '../../2d_try_on_app/try_on_nav_bridge.dart';
@@ -126,6 +131,7 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
 
     _startBannerAutoScroll();
     _loadTrackingCounts();
+    MarketplaceBadgeService.instance.ensureLoaded();
     LandingCatalogStore.instance.addListener(_onLandingCatalogChanged);
     if (kIncludeSellerListingsInMarketplace) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -135,6 +141,7 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
     LandingCatalogStore.instance.ensureLoaded().then((_) {
       if (mounted) setState(() {});
     });
+    MarketplaceDemoSeller.resolve().then((s) => MarketplaceDemoSeller.cache(s));
 
     _onLandingCatalogChanged();
 
@@ -415,6 +422,17 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
   }
 
   void _onItemTapped(int index) {
+    if (index == 0) {
+      MarketplaceBadgeService.instance.clearNewProducts();
+    } else if (index == 1) {
+      MarketplaceBadgeService.instance.clearNewReels();
+    } else if (index == 4) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        TailorChatService.markAllReadForCustomer(uid);
+        SellerChatService.markAllReadForCustomer(uid);
+      }
+    }
     setState(() {
       _selectedIndex = index;
     });
@@ -813,28 +831,6 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
 
             SliverToBoxAdapter(
               child: LandingCategoryCatalog(
-                onFindTailor: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginAsTailorScreen(),
-                    ),
-                  );
-                },
-                onBecomeSeller: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => LoginFormScreen(
-                        userType: UserType.seller,
-                        onSuccess: () {},
-                        onRegister: () {},
-                        onForgotPassword: (_) {},
-                        onBack: () => Navigator.pop(context),
-                      ),
-                    ),
-                  );
-                },
                 screenWidth: screenW,
               ),
             ),
@@ -859,9 +855,22 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
       ProfileScreen(),
         ],
       ),
-      bottomNavigationBar: MarketplaceBottomNav(
-        selectedIndex: _selectedIndex,
-        onTap: _onItemTapped,
+      bottomNavigationBar: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnap) {
+          final uid = authSnap.data?.uid ?? '';
+          return StreamBuilder<int>(
+            stream: CustomerChatBadges.unreadTotal(uid),
+            initialData: 0,
+            builder: (context, chatSnap) {
+              return MarketplaceBottomNav(
+                selectedIndex: _selectedIndex,
+                onTap: _onItemTapped,
+                chatUnread: chatSnap.data ?? 0,
+              );
+            },
+          );
+        },
       ),
     );
   }

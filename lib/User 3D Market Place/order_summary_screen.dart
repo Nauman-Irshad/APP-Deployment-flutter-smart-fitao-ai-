@@ -5,6 +5,7 @@ import 'package:model_viewer_plus/model_viewer_plus.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
 import '../Order-Tracking-System/tracking.dart' show OrderType;
+import '../services/marketplace_demo_seller.dart';
 
 class OrderSummaryScreen extends StatefulWidget {
   final Map<String, dynamic> product;
@@ -106,17 +107,11 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     final unitPrice = (widget.product['price'] is num)
         ? (widget.product['price'] as num).toDouble()
         : double.tryParse(widget.product['price']?.toString() ?? '0') ?? 0.0;
-    final sellerName = widget.product['sellerName']?.toString() ?? 'Seller';
-    final sellerId = widget.product['sellerId']?.toString() ?? '';
-    final productId =
-        widget.product['firebaseProductId']?.toString() ?? widget.product['id']?.toString() ?? '';
-
-    if (sellerId.isEmpty || productId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Missing seller or product data — open this item from the marketplace')),
-      );
-      return;
-    }
+    final seller = await MarketplaceDemoSeller.resolve();
+    final stamped = MarketplaceDemoSeller.attach(widget.product, seller);
+    final sellerName = stamped['sellerName']?.toString() ?? seller.shopName;
+    final sellerId = seller.uid;
+    final productId = stamped['firebaseProductId']?.toString() ?? '';
 
     if (widget.product['outOfStock'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,7 +170,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
         details: details,
         sellerId: sellerId,
         sellerName: sellerName,
-        sellerAddress: widget.product['sellerAddress']?.toString() ?? '',
+        sellerAddress: stamped['sellerAddress']?.toString() ?? seller.address,
         deliveryAddress: deliveryAddress,
       );
     } catch (e) {

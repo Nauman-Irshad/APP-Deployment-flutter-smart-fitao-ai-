@@ -3,8 +3,9 @@ import 'dart:math' as math;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../Order-Tracking-System/firebase_pages.dart';
 import '../Order-Tracking-System/seller_tracking_order.dart';
+import '../services/role_order_badges.dart';
+import '../widgets/nav_badge_icon.dart';
 import '../Order-Tracking-System/services/app_backend.dart';
 
 class SellerCenterScreen extends StatefulWidget {
@@ -154,6 +155,7 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final primary = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7FB),
@@ -183,21 +185,34 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
         ),
         centerTitle: false,
         actions: [
-          TextButton.icon(
-            onPressed: () {
-              if (FirebaseAuth.instance.currentUser == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Sign in as a seller to track orders')),
-                );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => const SellerOrdersPageFirebase()),
+          StreamBuilder<int>(
+            stream: user == null
+                ? Stream.value(0)
+                : RoleOrderBadges.sellerPendingCount(user.uid),
+            builder: (context, snap) {
+              final pending = snap.data ?? 0;
+              return TextButton.icon(
+                onPressed: () {
+                  if (FirebaseAuth.instance.currentUser == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Sign in as a seller to track orders')),
+                    );
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const SellerOrdersPageFirebase()),
+                  );
+                },
+                icon: NavBadgeIcon(
+                  icon: Icons.local_shipping_outlined,
+                  count: pending,
+                  iconSize: 20,
+                  color: primary,
+                ),
+                label: const Text('Track orders'),
               );
             },
-            icon: const Icon(Icons.local_shipping_outlined, size: 20),
-            label: const Text('Track orders'),
           ),
           const SizedBox(width: 8),
         ],
@@ -405,6 +420,11 @@ class _SellerCenterScreenState extends State<SellerCenterScreen> {
                                   ),
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Sales & profit count only after you tap Confirm Payment on a delivered order.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                             ),
                             const SizedBox(height: 10),
                             SizedBox(

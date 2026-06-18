@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-import '../Order-Tracking-System/firebase_pages.dart';
+import '../Order-Tracking-System/tailor_tracking_order.dart';
+import '../services/role_order_badges.dart';
+import '../widgets/nav_badge_icon.dart';
 import '../Order-Tracking-System/services/app_backend.dart';
 
 class _LegendItem extends StatelessWidget {
@@ -214,106 +216,6 @@ class _TailorCenterScreenState extends State<TailorCenterScreen> with SingleTick
     );
   }
 
-  Future<void> _showAddRateDialog() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sign in as a tailor to set your rate')),
-      );
-      return;
-    }
-    final rateCtrl = TextEditingController();
-    final profitCtrl = TextEditingController(text: '0');
-    var available = true;
-    bool? ok;
-    var rateText = '';
-    var profitText = '';
-    try {
-      ok = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Add rate'),
-          content: StatefulBuilder(
-            builder: (ctx, setS) => Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: rateCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Stitching rate (PKR per unit)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: profitCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Profit (PKR per unit)',
-                    helperText: 'Dashboard only — not shown to customers',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Available for custom orders'),
-                  value: available,
-                  onChanged: (v) => setS(() => available = v),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
-          ],
-        ),
-      );
-      rateText = rateCtrl.text;
-      profitText = profitCtrl.text;
-    } finally {
-      rateCtrl.dispose();
-      profitCtrl.dispose();
-    }
-    if (ok != true || !context.mounted) return;
-    final rate = double.tryParse(rateText.trim()) ?? 0;
-    if (rate <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a rate greater than 0')),
-      );
-      return;
-    }
-    final profit = double.tryParse(profitText.trim()) ?? -1;
-    if (profit < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profit must be 0 or greater')),
-      );
-      return;
-    }
-    try {
-      await AppBackend.instance.setTailorAvailableAndRate(
-        uid: user.uid,
-        stitchingRatePkrPerUnit: rate,
-        tailorProfitPerUnit: profit,
-        available: available,
-      );
-      await _loadTailorProfile();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rate saved')),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save: $e')),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -348,25 +250,34 @@ class _TailorCenterScreenState extends State<TailorCenterScreen> with SingleTick
         ),
         centerTitle: false,
         actions: [
-          TextButton(
-            onPressed: _showAddRateDialog,
-            child: const Text('Add rate'),
-          ),
-          TextButton.icon(
-            onPressed: () {
-              if (FirebaseAuth.instance.currentUser == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Sign in as a tailor to track orders')),
-                );
-                return;
-              }
-              Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => const TailorOrdersPageFirebase()),
+          StreamBuilder<int>(
+            stream: user == null
+                ? Stream.value(0)
+                : RoleOrderBadges.tailorPendingCount(user.uid),
+            builder: (context, snap) {
+              final pending = snap.data ?? 0;
+              return TextButton.icon(
+                onPressed: () {
+                  if (FirebaseAuth.instance.currentUser == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Sign in as a tailor to track orders')),
+                    );
+                    return;
+                  }
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const TailorOrdersPageFirebase()),
+                  );
+                },
+                icon: NavBadgeIcon(
+                  icon: Icons.local_shipping_outlined,
+                  count: pending,
+                  iconSize: 20,
+                  color: primary,
+                ),
+                label: const Text('Track orders'),
               );
             },
-            icon: const Icon(Icons.local_shipping_outlined, size: 20),
-            label: const Text('Track orders'),
           ),
           const SizedBox(width: 4),
         ],
@@ -444,7 +355,7 @@ class _TailorCenterScreenState extends State<TailorCenterScreen> with SingleTick
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.asset(
-                'assets/4.png',
+                'assets/4.webp',
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
@@ -541,7 +452,7 @@ class _TailorCenterScreenState extends State<TailorCenterScreen> with SingleTick
           ),
           const SizedBox(height: 8),
           Text(
-            'Counts when the customer releases tailoring payment.',
+            'Per order: stitching fee (sales) and PKR 500 tailor profit.',
             style: TextStyle(fontSize: 11, color: Colors.grey[600]),
           ),
           const SizedBox(height: 12),

@@ -7,6 +7,7 @@ class SellerChatInboxItem {
     required this.customerName,
     required this.lastMessage,
     this.updatedAt,
+    this.unreadForSeller = 0,
   });
 
   final String chatId;
@@ -14,17 +15,21 @@ class SellerChatInboxItem {
   final String customerName;
   final String lastMessage;
   final DateTime? updatedAt;
+  final int unreadForSeller;
 
   static SellerChatInboxItem fromMap(Map<String, dynamic> data) {
     final updated = data['updatedAt'];
     DateTime? dt;
     if (updated is Timestamp) dt = updated.toDate();
+    final unreadRaw = data['unreadForSeller'];
+    final unread = unreadRaw is num ? unreadRaw.toInt() : 0;
     return SellerChatInboxItem(
       chatId: data['chatId']?.toString() ?? '',
       customerId: data['customerId']?.toString() ?? '',
       customerName: data['customerName']?.toString() ?? 'Customer',
       lastMessage: data['lastPreview']?.toString() ?? '',
       updatedAt: dt,
+      unreadForSeller: unread,
     );
   }
 }
@@ -110,6 +115,9 @@ class SellerChatService {
     });
     await _db.collection('seller_customer_chats').doc(chatId).set({
       'lastPreview': text,
+      'lastSender': 'customer',
+      'unreadForSeller': FieldValue.increment(1),
+      'unreadForCustomer': 0,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
@@ -137,8 +145,70 @@ class SellerChatService {
     });
     await _db.collection('seller_customer_chats').doc(chatId).set({
       'lastPreview': text,
+      'lastSender': 'seller',
+      'unreadForSeller': 0,
+      'unreadForCustomer': FieldValue.increment(1),
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  static Future<void> markChatReadForSeller(String chatId) async {
+    await _db.collection('seller_customer_chats').doc(chatId).set({
+      'unreadForSeller': 0,
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> markAllReadForSeller(String sellerId) async {
+    final snap = await _db
+        .collection('seller_customer_chats')
+        .where('sellerId', isEqualTo: sellerId)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.set(doc.reference, {'unreadForSeller': 0}, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  static Stream<int> watchSellerUnreadTotal(String sellerId) {
+    return watchSellerInbox(sellerId).map(
+      (items) => items.fold<int>(0, (sum, i) => sum + i.unreadForSeller),
+    );
+  }
+
+  static Stream<int> watchCustomerUnreadTotal(String customerId) {
+    return _db
+        .collection('seller_customer_chats')
+        .where('customerId', isEqualTo: customerId)
+        .snapshots()
+        .map((snap) {
+          var total = 0;
+          for (final d in snap.docs) {
+            final n = d.data()['unreadForCustomer'];
+            if (n is num) total += n.toInt();
+          }
+          return total;
+        });
+  }
+
+  static Future<void> markChatReadForCustomer(String chatId) async {
+    await _db.collection('seller_customer_chats').doc(chatId).set({
+      'unreadForCustomer': 0,
+    }, SetOptions(merge: true));
+  }
+
+  static Future<void> markAllReadForCustomer(String customerId) async {
+    final snap = await _db
+        .collection('seller_customer_chats')
+        .where('customerId', isEqualTo: customerId)
+        .get();
+    if (snap.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.set(doc.reference, {'unreadForCustomer': 0}, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   static Stream<List<SellerChatMessage>> watchMessages(String chatId) {

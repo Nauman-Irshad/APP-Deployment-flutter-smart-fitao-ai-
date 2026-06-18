@@ -48,6 +48,7 @@ class DemoAccountsService {
         shopName: DemoAccounts.tailorShop,
         available: true,
         stitchingRate: 500,
+        tailorProfitPerUnit: 500,
       );
 
   static Future<void> signInDemoSeller() => _signInOrEnsureDemo(
@@ -67,6 +68,7 @@ class DemoAccountsService {
     String address = '',
     bool available = false,
     double stitchingRate = 0,
+    double tailorProfitPerUnit = 0,
   }) async {
     final auth = FirebaseAuth.instance;
     final normalizedEmail = email.trim();
@@ -112,6 +114,7 @@ class DemoAccountsService {
       address: address,
       available: available,
       stitchingRate: stitchingRate,
+      tailorProfitPerUnit: tailorProfitPerUnit,
     );
   }
 
@@ -124,6 +127,7 @@ class DemoAccountsService {
     String address = '',
     bool available = false,
     double stitchingRate = 0,
+    double tailorProfitPerUnit = 0,
   }) async {
     final backend = AppBackend.instance;
     try {
@@ -138,6 +142,9 @@ class DemoAccountsService {
           address: address.isNotEmpty ? address : profile.address,
           available: available || profile.available,
           stitchingRate: stitchingRate > 0 ? stitchingRate : profile.stitchingRate,
+          tailorProfitPerUnit: tailorProfitPerUnit > 0
+              ? tailorProfitPerUnit
+              : profile.tailorProfitPerUnit,
         );
       }
     } catch (_) {
@@ -150,6 +157,7 @@ class DemoAccountsService {
         address: address.isNotEmpty ? address : 'Demo address',
         available: available,
         stitchingRate: stitchingRate,
+        tailorProfitPerUnit: tailorProfitPerUnit,
       );
     }
   }
