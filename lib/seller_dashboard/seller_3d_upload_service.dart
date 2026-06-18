@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'seller_3d_file_picker.dart';
 import 'seller_3d_folder.dart';
 import '../services/firebase_media_upload_service.dart';
+import '../services/upload_target.dart';
 
 /// Uploads GLB to local dev server (5190) or Firebase Storage when deployed.
 class Seller3dUploadService {
@@ -55,11 +56,11 @@ class Seller3dUploadService {
     if (files.isEmpty) return null;
 
     final productKey = '${DateTime.now().millisecondsSinceEpoch}';
-    final localOk = await isServerReachable();
-    if (localOk) {
+    final useLocal = !preferFirebaseUpload && await isServerReachable();
+    if (useLocal) {
       onProgress?.call('Uploading to local 3D server…');
       final url = await uploadFilesAsZip(files: files, onProgress: onProgress);
-      if (url.isEmpty) return null;
+      if (url == null || url.isEmpty) return null;
       String? imageUrl;
       final key = RegExp(r'/models/([^/]+)/').firstMatch(url)?.group(1);
       if (key != null) {
