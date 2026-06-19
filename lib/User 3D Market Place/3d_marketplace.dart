@@ -31,9 +31,11 @@ import '../../services/marketplace_badge_service.dart';
 import '../../services/customer_chat_badges.dart';
 import '../../services/seller_chat_service.dart';
 import '../../services/tailor_chat_service.dart';
+import '../../2d_try_on_app/captured_photo_session.dart';
 import '../../2d_try_on_app/try_on_handoff.dart';
 import '../../2d_try_on_app/try_on_nav_bridge.dart';
-import '../../2d_try_on_app/try_on_marketplace_tab.dart';
+import '../../2d_try_on_app/try_on_screen.dart';
+import '../../2d_try_on_app/try_on_vercel_webview.dart';
 import '../../config/deployed_backend_banner.dart';
 import '../services/customer_fitting_store_stub.dart'
     if (dart.library.html) '../services/customer_fitting_store_web.dart';
@@ -841,10 +843,15 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
       ),
       ),
       ReelScreen(active: _selectedIndex == 1),
-      TryOnMarketplaceTab(
-        key: ValueKey<int>(_tryOnPanelKey),
-        embeddedInNav: true,
-      ),
+      kIsWeb
+          ? TryOn2dScreen(
+              key: ValueKey<int>(_tryOnPanelKey),
+              embeddedInNav: true,
+              initialPersonImageUrl: CapturedPhotoSession.imageUrl,
+              initialPersonBytes: CapturedPhotoSession.personBytes,
+              landmarkCount: CapturedPhotoSession.landmarkCount,
+            )
+          : TryOnVercelWebView(embeddedInNav: true),
       CartScreen(
         onBackToShopping: () => setState(() => _selectedIndex = 0),
       ),

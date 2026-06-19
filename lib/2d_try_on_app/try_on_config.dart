@@ -22,13 +22,13 @@ class TryOnConfig {
   static const _localHost = String.fromEnvironment('LOCAL_DEV_HOST', defaultValue: '');
 
   static String get apiBase {
-    if (_apiFromEnv.isNotEmpty) return _apiFromEnv.replaceAll(RegExp(r'/+$'), '');
+    if (_apiFromEnv.isNotEmpty) {
+      return _apiFromEnv.replaceAll(RegExp(r'/+$'), '');
+    }
     final h = _localHost.trim();
     if (h.isNotEmpty) return 'http://$h:8765';
-    if (LiveBackendConfig.isPhoneOrTabletApp) {
-      return ProductionUrls.tryOnApi.replaceAll(RegExp(r'/+$'), '');
-    }
     if (LiveBackendConfig.useLocalOnWeb) return 'http://127.0.0.1:8765';
+    // Deployed Render FastAPI (Vercel build sets TRYON_API_BASE).
     return ProductionUrls.tryOnApi.replaceAll(RegExp(r'/+$'), '');
   }
 

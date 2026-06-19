@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'captured_photo_session.dart';
 import 'try_on_api_client.dart';
+import 'try_on_config.dart';
 import 'try_on_download.dart';
 import 'try_on_find_tailor_screen.dart';
 import 'try_on_fitting_flow_header.dart';
@@ -199,7 +200,7 @@ class _TryOn2dScreenState extends State<TryOn2dScreen> {
       }
     } catch (_) {
       apiWarning =
-          'Try-on API offline. Run: cd id-2d-try-on && npm run api (port 8765)';
+          'Try-on API warming up (${TryOnConfig.apiBase}). Tap Run Try-On to retry.';
     }
 
     try {
@@ -214,8 +215,6 @@ class _TryOn2dScreenState extends State<TryOn2dScreen> {
         _loadingGarments = false;
         if (names.isEmpty) {
           _error = 'No kurta images found. Sync assets/2d_try_on_garments.';
-        } else if (apiWarning != null) {
-          _error = apiWarning;
         }
       });
       unawaited(TryOnGarmentService.preloadGarments(names));
