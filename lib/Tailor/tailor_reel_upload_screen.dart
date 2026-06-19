@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 
 import '../Order-Tracking-System/services/app_backend.dart';
+import '../services/cloud_media_url.dart';
 import '../services/reel_catalog_service.dart';
 import '../services/tailor_reel_upload_service.dart';
 
@@ -20,11 +21,13 @@ class TailorReelUploadScreen extends StatefulWidget {
 
 class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
   final _title = TextEditingController(text: 'My tailoring reel');
+  final _pasteVideoUrl = TextEditingController();
   bool _saving = false;
   bool _picking = false;
   String? _status;
   XFile? _pickedVideo;
   String? _uploadedUrl;
+  bool _usingPastedUrl = false;
   AppUserProfile? _profile;
 
   @override
@@ -48,7 +51,31 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
   @override
   void dispose() {
     _title.dispose();
+    _pasteVideoUrl.dispose();
     super.dispose();
+  }
+
+  void _applyPastedVideoUrl() {
+    final url = CloudMediaUrl.normalize(_pasteVideoUrl.text);
+    final err = CloudMediaUrl.validateVideoUrl(url);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    setState(() {
+      _usingPastedUrl = true;
+      _uploadedUrl = url;
+      _pickedVideo = null;
+      _status = 'Using online video link — no upload wait';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Video link OK — tap Upload reel to publish'),
+        backgroundColor: Color(0xFF059669),
+      ),
+    );
   }
 
   Future<void> _pickFromGallery() async {
@@ -77,6 +104,8 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
       setState(() {
         _pickedVideo = file;
         _uploadedUrl = null;
+        _usingPastedUrl = false;
+        _pasteVideoUrl.clear();
         _status = 'Selected: ${file!.name}';
       });
     } finally {
@@ -99,9 +128,15 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
       );
       return;
     }
-    if (_pickedVideo == null && (_uploadedUrl == null || _uploadedUrl!.isEmpty)) {
+    if (_pickedVideo == null &&
+        (_uploadedUrl == null || _uploadedUrl!.isEmpty) &&
+        _pasteVideoUrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a video from gallery first')),
+        const SnackBar(
+          content: Text(
+            'Choose a video from gallery or paste a Cloudflare / https video link',
+          ),
+        ),
       );
       return;
     }
@@ -109,6 +144,12 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
     setState(() => _saving = true);
     try {
       var videoUrl = _uploadedUrl ?? '';
+      if (videoUrl.isEmpty && _pasteVideoUrl.text.trim().isNotEmpty) {
+        final pasted = CloudMediaUrl.normalize(_pasteVideoUrl.text);
+        final err = CloudMediaUrl.validateVideoUrl(pasted);
+        if (err != null) throw StateError(err);
+        videoUrl = pasted;
+      }
       if (videoUrl.isEmpty && _pickedVideo != null) {
         setState(() => _status = 'Uploading your video…');
         videoUrl = await TailorReelUploadService.uploadPickedVideo(
@@ -200,6 +241,71 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
             Text(_status!, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
           ],
           const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: Divider(color: Colors.grey.shade300)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Colors.grey.shade300)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Paste Cloudflare R2 video link (fast — no upload wait)',
+            style: TextStyle(
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Upload .mp4 to R2, copy public https link, paste below.',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _pasteVideoUrl,
+            decoration: const InputDecoration(
+              labelText: 'Cloudflare / https video link (.mp4)',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.link),
+            ),
+            onChanged: (_) {
+              if (_usingPastedUrl) {
+                setState(() {
+                  _usingPastedUrl = false;
+                  _uploadedUrl = null;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _applyPastedVideoUrl,
+            icon: const Icon(Icons.check_circle_outline),
+            label: const Text('Use this video link'),
+          ),
+          if (_usingPastedUrl) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Link ready — customers see reel from your CDN',
+              style: TextStyle(
+                color: primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
           TextField(
             controller: _title,
             decoration: const InputDecoration(
@@ -223,7 +329,11 @@ class _TailorReelUploadScreenState extends State<TailorReelUploadScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.cloud_upload_outlined),
-              label: Text(_saving ? 'Uploading…' : 'Upload reel'),
+              label: Text(
+                _saving
+                    ? 'Saving…'
+                    : (_usingPastedUrl ? 'Publish reel (link)' : 'Upload reel'),
+              ),
             ),
           ),
         ],

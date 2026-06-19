@@ -35,6 +35,7 @@ import '../../2d_try_on_app/captured_photo_session.dart';
 import '../../2d_try_on_app/try_on_handoff.dart';
 import '../../2d_try_on_app/try_on_nav_bridge.dart';
 import '../../2d_try_on_app/try_on_screen.dart';
+import '../../2d_try_on_app/try_on_vercel_webview.dart';
 import '../../config/deployed_backend_banner.dart';
 import '../services/customer_fitting_store_stub.dart'
     if (dart.library.html) '../services/customer_fitting_store_web.dart';
@@ -842,13 +843,15 @@ class _MarketPlace3DState extends State<MarketPlace3D> with SingleTickerProvider
       ),
       ),
       ReelScreen(active: _selectedIndex == 1),
-      TryOn2dScreen(
-        key: ValueKey<int>(_tryOnPanelKey),
-        embeddedInNav: true,
-        initialPersonImageUrl: CapturedPhotoSession.imageUrl,
-        initialPersonBytes: CapturedPhotoSession.personBytes,
-        landmarkCount: CapturedPhotoSession.landmarkCount,
-      ),
+      kIsWeb
+          ? TryOn2dScreen(
+              key: ValueKey<int>(_tryOnPanelKey),
+              embeddedInNav: true,
+              initialPersonImageUrl: CapturedPhotoSession.imageUrl,
+              initialPersonBytes: CapturedPhotoSession.personBytes,
+              landmarkCount: CapturedPhotoSession.landmarkCount,
+            )
+          : TryOnVercelWebView(embeddedInNav: true),
       CartScreen(
         onBackToShopping: () => setState(() => _selectedIndex = 0),
       ),

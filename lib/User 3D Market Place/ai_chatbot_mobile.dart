@@ -6,7 +6,7 @@ import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 import '../../register_webview.dart';
 import 'size prediction model/studio_config.dart';
 
-/// NLP chat on phone (Android / iOS): bundled UI in APK + 3D from Vercel when online.
+/// NLP chat on phone: WebView → live Vercel `/smart-fitao-chat/` (no localhost).
 class AiChatbotScreen extends StatefulWidget {
   const AiChatbotScreen({super.key});
 
@@ -18,7 +18,6 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
   WebViewController? _controller;
   var _loading = true;
   String? _error;
-  var _useBundled = StudioConfig.useBundledChatInApp;
 
   Uri get _remoteChatUri {
     return StudioConfig.smartFitaoChatUri.replace(
@@ -34,11 +33,7 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
   }
 
   Future<void> _loadChat(WebViewController controller) async {
-    if (_useBundled) {
-      await controller.loadFlutterAsset(StudioConfig.bundledChatAsset);
-    } else {
-      await controller.loadRequest(_remoteChatUri);
-    }
+    await controller.loadRequest(_remoteChatUri);
   }
 
   void _initWebView() {
@@ -65,7 +60,10 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
             if (mounted) {
               setState(() {
                 _loading = false;
-                _error = _formatLoadError(err.description);
+                _error =
+                    'Could not load online AI chat.\n'
+                    'URL: $_remoteChatUri\n'
+                    '${err.description}';
               });
             }
           },
@@ -81,20 +79,6 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
     _controller = controller;
     _loadChat(controller);
     if (mounted) setState(() {});
-  }
-
-  String _formatLoadError(String description) {
-    if (StudioConfig.isLocalChat) {
-      return 'Local chat failed.\n'
-          'On a real phone use normal build (no STUDIO_LOCAL_DEV).\n'
-          'Emulator + PC server: start-local-website-for-app.ps1\n'
-          '$_remoteChatUri\n$description';
-    }
-    if (_useBundled) {
-      return 'AI chat could not open.\n'
-          'NLP is in the app; 3D needs internet.\n$description';
-    }
-    return 'Could not load AI chat. Check internet.\n$_remoteChatUri\n$description';
   }
 
   @override
@@ -114,16 +98,15 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          if (_useBundled)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Center(
-                child: Text(
-                  'In-app NLP',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                ),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: Text(
+                'Online',
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
               ),
             ),
+          ),
         ],
       ),
       body: _buildBody(),
@@ -149,7 +132,7 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
                 children: [
                   CircularProgressIndicator(color: Color(0xFF059669)),
                   SizedBox(height: 12),
-                  Text('Loading SmartFitao AI…'),
+                  Text('Loading SmartFitao AI from Vercel…'),
                 ],
               ),
             ),
@@ -166,7 +149,7 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
                   Text(
                     _error!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black54),
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
@@ -182,18 +165,6 @@ class _AiChatbotScreenState extends State<AiChatbotScreen> {
                     ),
                     child: const Text('Retry'),
                   ),
-                  if (_useBundled)
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _useBundled = false;
-                          _loading = true;
-                          _error = null;
-                        });
-                        _loadChat(controller);
-                      },
-                      child: const Text('Try online chat instead'),
-                    ),
                 ],
               ),
             ),

@@ -3,13 +3,16 @@ import 'package:flutter/foundation.dart';
 import '../2d_try_on_app/try_on_config.dart';
 import '../User 3D Market Place/camera_work_computer_vision/camera_cv_config.dart';
 import '../User 3D Market Place/size prediction model/cloth_prediction_config.dart';
+import 'live_backend_config.dart';
 import 'media_cdn_config.dart';
 
 /// Summary of which backends the app is using (shown on Edge / web).
 class DeployedBackendStatus {
   DeployedBackendStatus._();
 
-  static bool get showOnWeb => false;
+  /// Show live/local strip on web and on phone APK.
+  static bool get showOnWeb =>
+      kIsWeb || LiveBackendConfig.isPhoneOrTabletApp;
 
   static bool get isDeployedMode {
     final size = ClothPredictionConfig.baseUrl.toLowerCase();

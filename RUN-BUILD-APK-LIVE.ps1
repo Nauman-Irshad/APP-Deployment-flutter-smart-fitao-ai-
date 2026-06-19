@@ -8,7 +8,7 @@
 #   .\RUN-BUILD-APK-LIVE.ps1
 
 param(
-    [string]$StripeBase = '',
+    [string]$StripeBase = 'https://smartfitao-stripe-api.onrender.com',
     [string]$MediaCdnBase = 'https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev'
 )
 
@@ -19,13 +19,17 @@ $shop = 'https://fyp-web-code-deployment-flea.vercel.app'
 $render = 'https://fyp-backend-hi10.onrender.com'
 $tryon = 'https://threed-studio-deploymentt.onrender.com'
 $cv = 'https://qr-code-scan-computer-visionj-git-main-nauman-irshads-projects.vercel.app'
+$chat = "$shop/smart-fitao-chat/"
 
 $defines = @(
     "--dart-define=CLOTH_PREDICT_BASE=$render",
     "--dart-define=CLOTH_STUDIO_URL=$shop/",
     "--dart-define=TRYON_API_BASE=$tryon",
+    "--dart-define=TRYON_WEB_URL=$shop",
     "--dart-define=CV_CAMERA_BASE=$cv",
-    "--dart-define=SIZE_API_LOCAL=false"
+    "--dart-define=SIZE_API_LOCAL=false",
+    "--dart-define=FORCE_REMOTE_CHAT=true",
+    "--dart-define=SMARTFITAO_CHAT_URL=$chat"
 )
 
 if ($MediaCdnBase.Trim()) {
@@ -37,9 +41,9 @@ if ($MediaCdnBase.Trim()) {
 if ($StripeBase.Trim()) {
     $defines += "--dart-define=STRIPE_PAYMENT_BASE=$($StripeBase.Trim().TrimEnd('/'))"
     Write-Host "Stripe live: $StripeBase" -ForegroundColor Green
-} else {
-    Write-Host "Demo build: Size, Camera, 2D Try-on, Chat = LIVE. Stripe Pay = skipped." -ForegroundColor Cyan
 }
+
+Write-Host "Same dart-defines as Vercel (scripts/vercel-build.sh) + CV_CAMERA for phone scan." -ForegroundColor Cyan
 
 Write-Host ""
 Write-Host "=== Live in APK ===" -ForegroundColor Cyan

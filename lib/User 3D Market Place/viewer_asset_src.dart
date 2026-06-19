@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 
 import '../../config/fabric_local_config.dart';
+import '../../config/live_backend_config.dart';
 import '../../config/media_cdn_config.dart';
 import '../../config/production_urls.dart';
 import '../../config/remote_media_resolver.dart';
@@ -134,6 +135,10 @@ String landingAssetSrc(String? assetPathRaw) {
         RemoteMediaResolver.instance.imageUrlForPath(key);
     if (remote != null && remote.isNotEmpty) return remote;
     if (MediaCdnConfig.useCustomCdn) {
+      return MediaCdnConfig.urlForRelativePath(key);
+    }
+    if (LiveBackendConfig.isPhoneOrTabletApp || kReleaseMode) {
+      if (key.startsWith('http://') || key.startsWith('https://')) return key;
       return MediaCdnConfig.urlForRelativePath(key);
     }
     if (kReleaseMode) return StudioConfig.remotePublicUrl(key);

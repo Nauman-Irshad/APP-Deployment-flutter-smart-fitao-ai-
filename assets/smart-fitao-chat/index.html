@@ -77,7 +77,9 @@
     var PRODUCTION_API = 'https://fyp-web-code-deployment-flea.vercel.app';
     var o = window.location.origin || '';
     var API_BASE = PRODUCTION_API;
-    if (o.indexOf('127.0.0.1') !== -1 || o.indexOf('localhost') !== -1) {
+    if (!o || o === 'null' || o.indexOf('file:') === 0 || o.indexOf('android_asset') !== -1) {
+      API_BASE = PRODUCTION_API;
+    } else if (o.indexOf('127.0.0.1') !== -1 || o.indexOf('localhost') !== -1) {
       if (o.indexOf(':5177') !== -1) {
         API_BASE = o;
       } else {

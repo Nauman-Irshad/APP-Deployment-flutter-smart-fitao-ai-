@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../Order-Tracking-System/services/app_backend.dart';
+import '../services/cloud_media_url.dart';
 import '../services/marketplace_badge_service.dart';
 import 'seller_3d_upload_service.dart';
 
@@ -37,6 +38,7 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
   String? _pickedImageName;
   List<PlatformFile> _picked3dFiles = [];
   String? _uploadStatus;
+  bool _usingPastedGlb = false;
 
   static const _categories = [
     'Kurta Shalwar',
@@ -57,6 +59,28 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
     super.dispose();
   }
 
+  Future<void> _applyPastedGlbUrl() async {
+    final url = CloudMediaUrl.normalize(_modelUrl.text);
+    final err = CloudMediaUrl.validateGlbUrl(url);
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Colors.red),
+      );
+      return;
+    }
+    setState(() {
+      _usingPastedGlb = true;
+      _picked3dFiles = [];
+      _uploadStatus = 'Using online GLB link — no file upload needed';
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('GLB link OK — tap Upload to publish on 3D marketplace'),
+        backgroundColor: _green,
+      ),
+    );
+  }
+
   Future<void> _pickGlbFiles() async {
     try {
       final files = await Seller3dUploadService.pickModelFiles();
@@ -74,6 +98,7 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
       setState(() {
         _picked3dFiles = files;
         _uploadStatus = null;
+        _usingPastedGlb = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Selected ${files.length} file(s) for 3D upload')),
@@ -103,6 +128,7 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
       setState(() {
         _picked3dFiles = files;
         _uploadStatus = null;
+        _usingPastedGlb = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -171,7 +197,7 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Pick a .glb file (or folder) above, or paste image / model URLs',
+            'Pick a .glb file, paste a Cloudflare GLB link, or paste image / model URLs',
           ),
         ),
       );
@@ -200,6 +226,14 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
             _imageUrl.text = imageUrl;
           }
         }
+      } else if (modelPath.isNotEmpty) {
+        final glbErr = CloudMediaUrl.validateGlbUrl(modelPath);
+        if (glbErr != null) throw StateError(glbErr);
+        if (imageUrl.isNotEmpty) {
+          final imgErr = CloudMediaUrl.validateImageUrl(imageUrl);
+          if (imgErr != null) throw StateError(imgErr);
+        }
+        setState(() => _uploadStatus = 'Using pasted Cloudflare / online GLB link…');
       }
 
       if (imageUrl.isEmpty && modelPath.isEmpty) {
@@ -382,7 +416,7 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
               _modelUrl,
               '3D model URL (optional)',
               Icons.view_in_ar,
-              helper: 'Auto-filled after you pick .glb above — manual URL not required',
+              helper: 'Filled after file upload, or paste Cloudflare link above',
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -500,6 +534,61 @@ class _SellerAddProductScreenState extends State<SellerAddProductScreen> {
           if (_uploadStatus != null) ...[
             const SizedBox(height: 6),
             Text(_uploadStatus!, style: const TextStyle(fontSize: 12, color: _green)),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: Divider(color: Colors.grey.shade300)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Colors.grey.shade300)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Paste Cloudflare R2 link (fast — no file upload)',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Upload .glb to Cloudflare R2, copy public https link, paste below.',
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _modelUrl,
+            decoration: _inputDecoration(
+              'Cloudflare / https .glb link',
+              icon: Icons.link,
+            ),
+            onChanged: (_) {
+              if (_usingPastedGlb) setState(() => _usingPastedGlb = false);
+            },
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _applyPastedGlbUrl,
+            icon: const Icon(Icons.check_circle_outline, color: _green),
+            label: const Text('Use this 3D link'),
+          ),
+          if (_usingPastedGlb) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Link ready — tap Upload to show on 3D marketplace',
+              style: TextStyle(fontSize: 12, color: _green, fontWeight: FontWeight.w600),
+            ),
           ],
         ],
       ),

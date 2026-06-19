@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../config/live_backend_config.dart';
+
 /// Remote 3D Studio — hosted on Vercel; **nothing bundled in the APK**.
 ///
 /// Local website + NLP chat (Vite, port 5177):
@@ -131,9 +133,10 @@ class StudioConfig {
   static bool get isLocalChat =>
       useLocalWebsite || isLocalHost || useLocalNlpOnWeb;
 
-  /// `true` on **phone APK** — NLP/FAQ bundled in app; 3D GLBs load from [apiOrigin] (internet).
+  /// Phone APK always loads hosted chat (Vercel WebView). Bundled asset is dev-only.
   static bool get useBundledChatInApp {
     if (kIsWeb || useLocalWebsite) return false;
+    if (LiveBackendConfig.isPhoneOrTabletApp) return false;
     const forceRemote = bool.fromEnvironment(
       'FORCE_REMOTE_CHAT',
       defaultValue: false,
