@@ -48,7 +48,7 @@ class TryOnApiClient {
   Future<TryOnHealthInfo> fetchHealth() async {
     try {
       final uri = Uri.parse(TryOnConfig.apiUrl('/health'));
-      final res = await _client.get(uri).timeout(const Duration(seconds: 8));
+      final res = await _client.get(uri).timeout(const Duration(seconds: 45));
       if (res.statusCode < 200 || res.statusCode >= 300) {
         return TryOnHealthInfo(
           ok: false,

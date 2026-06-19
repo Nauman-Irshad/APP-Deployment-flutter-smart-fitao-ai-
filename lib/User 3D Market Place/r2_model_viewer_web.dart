@@ -11,7 +11,15 @@ final Set<String> _registeredViewTypes = <String>{};
 
 bool _skipCrossOrigin(String src) {
   if (src.startsWith('blob:')) return true;
-  return isFirebaseStorageGlbUrl(src);
+  if (isFirebaseStorageGlbUrl(src)) return true;
+  final lower = src.toLowerCase();
+  // R2 / CDN often omit ACAO — crossorigin breaks model-viewer on Flutter web.
+  if (lower.contains('r2.dev') ||
+      lower.contains('cloudflare') ||
+      lower.contains('r2.cloudflarestorage.com')) {
+    return true;
+  }
+  return false;
 }
 
 void _wireModelViewerEvents(web.HTMLElement mv, String bridgeKey) {

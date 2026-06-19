@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../config/live_backend_config.dart';
 import '../../config/production_urls.dart';
 
@@ -15,14 +17,24 @@ class CameraCvConfig {
     defaultValue: '',
   );
 
+  static bool get _isLocalWebHost {
+    if (!kIsWeb) return false;
+    final h = Uri.base.host.toLowerCase();
+    return h == '127.0.0.1' || h == 'localhost';
+  }
+
   static String get baseUrl {
     var b = _envBase.trim();
     if (b.isEmpty) {
-      if (LiveBackendConfig.isPhoneOrTabletApp) {
+      final localHost = _localHost.trim();
+      final useLocalCv = localHost.isNotEmpty ||
+          (kIsWeb && (_isLocalWebHost || LiveBackendConfig.useLocalOnWeb));
+      if (LiveBackendConfig.isPhoneOrTabletApp || !useLocalCv) {
         b = ProductionUrls.cvCamera;
       } else {
-        final h = _localHost.trim();
-        b = h.isNotEmpty ? 'http://$h:5003' : 'http://127.0.0.1:5003';
+        b = localHost.isNotEmpty
+            ? 'http://$localHost:5003'
+            : 'http://127.0.0.1:5003';
       }
     }
     if (!b.contains('://')) b = 'http://$b';

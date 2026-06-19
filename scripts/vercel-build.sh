@@ -20,6 +20,7 @@ SHOP_URL="https://fyp-web-code-deployment-flea.vercel.app"
 TRYON_API="https://threed-studio-deploymentt.onrender.com"
 MEDIA_CDN="https://pub-f822ccb86a5c48d6817764a7e50f2c48.r2.dev"
 STRIPE_API="https://smartfitao-stripe-api.onrender.com"
+CV_CAMERA="https://qr-code-scan-computer-visionj-git-main-nauman-irshads-projects.vercel.app"
 
 flutter build web --release \
   --no-wasm-dry-run \
@@ -28,6 +29,7 @@ flutter build web --release \
   --dart-define=TRYON_API_BASE="$TRYON_API" \
   --dart-define=MEDIA_CDN_BASE="${MEDIA_CDN}/" \
   --dart-define=STRIPE_PAYMENT_BASE="$STRIPE_API" \
+  --dart-define=CV_CAMERA_BASE="$CV_CAMERA" \
   --dart-define=SIZE_API_LOCAL=false
 
 echo "=== Build complete ==="

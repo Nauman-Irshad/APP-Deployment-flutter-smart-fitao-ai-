@@ -124,9 +124,8 @@ String landingAssetSrc(String? assetPathRaw) {
   if (key.isEmpty) return '';
   if (key.startsWith('http://') || key.startsWith('https://')) return key;
 
-  // Fabric: local folder only (`App/landing page product/fabric/`).
+  // Fabric: bundled assets (`landing page product/fabric/`) — not on R2 CDN.
   if (FabricLocalConfig.isFabricAssetPath(key)) {
-    if (kIsWeb) return _webPublicUrl(key);
     return key;
   }
 
